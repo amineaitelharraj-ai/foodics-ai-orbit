@@ -1,0 +1,56 @@
+CRITICAL FIX: Vue 3 Authentication                                                                                                                                                
+                                                                                                                                                                                    
+  Problem: The app uses mock tokens (mock_access_token_XXXX) instead of real Cognito JWTs, causing:                                                                                 
+  - WebSocket error: 4004 - Invalid token: Not enough segments                                                                                                                      
+  - Chat API: CORS 401 errors                                                                                                                                                       
+                                                                                                                                                                                    
+                                                                                                                             
+  ---                                                                                                                                                                               
+  Step 2: Update apps/orbit/src/stores/auth.ts                                                                                                                                      
+                                                                                                                                                                                    
+  Replace the signIn function (around line 52) to use real Cognito:                                                                                                                 
+                                                                                                                                                                                    
+  import { cognitoAuth } from '@shared/api/cognito-auth';                                                                                                                           
+  // OR if alias doesn't work:                                                                                                                                                      
+  // import { cognitoAuth } from '../../../shared/api/cognito-auth';                                                                                                                
+                                                                                                                                                                                    
+  async function signIn(email: string, password: string): Promise<void> {                                                                                                           
+    isLoading.value = true;                                                                                                                                                         
+    error.value = null;                                                                                                                                                             
+                                                                                                                                                                                    
+    try {                                                                                                                                                                           
+      if (!cognitoAuth.isConfigured()) {                                                                                                                                            
+        throw new Error('Cognito not configured. Set VITE_COGNITO_USER_POOL_ID and VITE_COGNITO_CLIENT_ID');                                                                        
+      }                                                                                                                                                                             
+                                                                                                                                                                                    
+      // Real Cognito authentication                                                                                                                                                
+      const authTokens = await cognitoAuth.signIn({ email, password });                                                                                                             
+      const authUser = await cognitoAuth.getCurrentUser();                                                                                                                          
+                                                                                                                                                                                    
+      if (!authUser) throw new Error('Failed to get user info');                                                                                                                    
+                                                                                                                                                                                    
+      user.value = {                                                                                                                                                                
+        id: authUser.sub,                                                                                                                                                           
+        email: authUser.email,                                                                                                                                                      
+        name: authUser.name,                                                                                                                                                        
+      };                                                                                                                                                                            
+      tokens.value = authTokens;                                                                                                                                                    
+      saveToStorage(user.value, authTokens);                                                                                                                                        
+    } catch (err) {                                                                                                                                                                 
+      const message = err instanceof Error ? err.message : 'Sign in failed';                                                                                                        
+      error.value = message;                                                                                                                                                        
+      throw err;                                                                                                                                                                    
+    } finally {                                                                                                                                                                     
+      isLoading.value = false;                                                                                                                                                      
+    }                                                                                                                                                                               
+  }                                                                                                                                                                                 
+                                                                                                                                                                                    
+  Also update logout:                                                                                                                                                               
+                                                                                                                                                                                    
+  function logout() {                                                                                                                                                               
+    cognitoAuth.signOut();                                                                                                                                                          
+    user.value = null;                                                                                                                                                              
+    tokens.value = null;                                                                                                                                                            
+    saveToStorage(null, null);                                                                                                                                                      
+  }                                                                                                                                                                                 
+                                                                          

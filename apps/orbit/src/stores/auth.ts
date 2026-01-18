@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { cognitoAuth } from '@shared/api/cognito-auth';
 
 export interface AuthUser {
   id: string;
@@ -54,31 +55,22 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null;
 
     try {
-      // TODO: Replace with actual Cognito authentication
-      // For now, simulate authentication
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Mock response - replace with actual auth service
-      const mockUser: AuthUser = {
-        id: '1',
-        email,
-        name: email.split('@')[0],
-      };
-
-      const mockTokens: AuthTokens = {
-        accessToken: `mock_access_token_${Date.now()}`,
-        idToken: `mock_id_token_${Date.now()}`,
-        refreshToken: `mock_refresh_token_${Date.now()}`,
-      };
-
-      // Validate credentials (mock)
-      if (password.length < 6) {
-        throw new Error('Invalid credentials');
+      if (!cognitoAuth.isConfigured()) {
+        throw new Error('Cognito not configured. Set VITE_COGNITO_USER_POOL_ID and VITE_COGNITO_CLIENT_ID');
       }
 
-      user.value = mockUser;
-      tokens.value = mockTokens;
-      saveToStorage(mockUser, mockTokens);
+      const authTokens = await cognitoAuth.signIn({ email, password });
+      const authUser = await cognitoAuth.getCurrentUser();
+
+      if (!authUser) throw new Error('Failed to get user info');
+
+      user.value = {
+        id: authUser.sub,
+        email: authUser.email,
+        name: authUser.name,
+      };
+      tokens.value = authTokens;
+      saveToStorage(user.value, authTokens);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign in failed';
       error.value = message;
@@ -89,22 +81,19 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function signUp(
-    _email: string,
+    email: string,
     password: string,
-    _name?: string
+    name?: string
   ): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
-      // TODO: Replace with actual Cognito sign up
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      if (password.length < 8) {
-        throw new Error('Password must be at least 8 characters');
+      if (!cognitoAuth.isConfigured()) {
+        throw new Error('Cognito not configured. Set VITE_COGNITO_USER_POOL_ID and VITE_COGNITO_CLIENT_ID');
       }
 
-      // Sign up successful - user needs to confirm
+      await cognitoAuth.signUp({ email, password, name });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign up failed';
       error.value = message;
@@ -114,13 +103,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function confirmSignUp(_email: string, _code: string): Promise<void> {
+  async function confirmSignUp(email: string, code: string): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
-      // TODO: Replace with actual Cognito confirmation
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (!cognitoAuth.isConfigured()) {
+        throw new Error('Cognito not configured. Set VITE_COGNITO_USER_POOL_ID and VITE_COGNITO_CLIENT_ID');
+      }
+
+      await cognitoAuth.confirmSignUp({ email, code });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Confirmation failed';
       error.value = message;
@@ -131,6 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
+    cognitoAuth.signOut();
     user.value = null;
     tokens.value = null;
     saveToStorage(null, null);
