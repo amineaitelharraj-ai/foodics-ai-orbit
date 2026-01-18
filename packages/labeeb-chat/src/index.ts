@@ -12,8 +12,7 @@
 // export { useLabeebAuth } from './composables/useLabeebAuth';
 
 // Types
-// export * from './types/messages';
-// export * from './types/hitl-previews';
+export * from './types';
 
-// Placeholder export to make the module valid
+// Version
 export const VERSION = '0.1.0';

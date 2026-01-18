@@ -19,5 +19,5 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": "."
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "env.d.ts"]
 }
