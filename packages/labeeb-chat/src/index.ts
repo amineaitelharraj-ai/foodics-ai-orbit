@@ -3,7 +3,8 @@
 
 // Components
 // export { default as LabeebChat } from './LabeebChat.vue';
-// export { default as LabeebChatProvider } from './LabeebChatProvider.vue';
+export { default as LabeebChatProvider } from './LabeebChatProvider.vue';
+export type { LabeebChatProviderProps } from './LabeebChatProvider.vue';
 
 // Composables
 export * from './composables';
