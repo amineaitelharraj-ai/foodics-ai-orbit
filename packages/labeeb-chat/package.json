@@ -25,6 +25,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "build:widget": "vite build --config vite.config.widget.ts",
+    "build:all": "pnpm build && pnpm build:widget",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx --fix",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",

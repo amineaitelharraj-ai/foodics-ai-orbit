@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Labeeb Chat Widget Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background-color: #f3f4f6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: white;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      color: #111827;
+    }
+
+    .token-input {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .token-input input {
+      padding: 0.5rem 1rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.5rem;
+      width: 300px;
+    }
+
+    .token-input button {
+      padding: 0.5rem 1rem;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+    }
+
+    .token-input button:hover {
+      background: #1d4ed8;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      padding: 2rem;
+      gap: 2rem;
+    }
+
+    .sidebar {
+      width: 300px;
+      background: white;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .sidebar h2 {
+      font-size: 1rem;
+      color: #374151;
+      margin-bottom: 1rem;
+    }
+
+    .sidebar pre {
+      font-size: 0.75rem;
+      background: #f9fafb;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    #chat-container {
+      flex: 1;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .placeholder {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Labeeb Chat Widget Test Page</h1>
+    <div class="token-input">
+      <input type="text" id="token-input" placeholder="Enter auth token..." />
+      <button onclick="initWidget()">Initialize Widget</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="sidebar">
+      <h2>Widget Configuration</h2>
+      <pre id="config-display">{
+  "container": "#chat-container",
+  "token": "...",
+  "title": "AI Assistant",
+  "subtitle": "Your intelligent companion",
+  "showHeader": true
+}</pre>
+
+      <h2 style="margin-top: 1.5rem;">Events Log</h2>
+      <pre id="events-log" style="max-height: 200px; overflow-y: auto;">Waiting for events...</pre>
+    </aside>
+
+    <div id="chat-container">
+      <div class="placeholder">
+        Enter a token and click "Initialize Widget" to start
+      </div>
+    </div>
+  </main>
+
+  <!-- Load the widget bundle -->
+  <script type="module">
+    // In production, this would be:
+    // import { createLabeebWidget } from '@foodics/labeeb-chat/widget';
+
+    // For local testing, we import from the built files
+    // After running `pnpm build:widget`, use:
+    // import { createLabeebWidget } from '../dist/widget/labeeb-widget.js';
+
+    // For now, we'll define a placeholder
+    window.widgetInstance = null;
+    window.eventsLog = [];
+
+    function logEvent(event, data) {
+      window.eventsLog.unshift(`[${new Date().toLocaleTimeString()}] ${event}: ${JSON.stringify(data)}`);
+      if (window.eventsLog.length > 50) window.eventsLog.pop();
+      document.getElementById('events-log').textContent = window.eventsLog.join('\n');
+    }
+
+    window.initWidget = async function() {
+      const token = document.getElementById('token-input').value;
+
+      if (!token) {
+        alert('Please enter an auth token');
+        return;
+      }
+
+      // Destroy existing instance
+      if (window.widgetInstance) {
+        window.widgetInstance.destroy();
+      }
+
+      // Clear container
+      document.getElementById('chat-container').innerHTML = '';
+
+      const config = {
+        container: '#chat-container',
+        token: token,
+        title: 'AI Assistant',
+        subtitle: 'Your intelligent companion',
+        showHeader: true,
+        onTokenExpired: () => logEvent('tokenExpired', {}),
+        onMessageSent: (msg) => logEvent('messageSent', { message: msg }),
+        onSessionChanged: (id) => logEvent('sessionChanged', { sessionId: id }),
+      };
+
+      document.getElementById('config-display').textContent = JSON.stringify(config, (k, v) => {
+        if (typeof v === 'function') return '[Function]';
+        return v;
+      }, 2);
+
+      try {
+        // Dynamic import for the widget
+        const { createLabeebWidget } = await import('../dist/widget/labeeb-widget.js');
+        window.widgetInstance = createLabeebWidget(config);
+        logEvent('initialized', { success: true });
+      } catch (error) {
+        console.error('Failed to initialize widget:', error);
+        document.getElementById('chat-container').innerHTML = `
+          <div class="placeholder" style="flex-direction: column; gap: 1rem;">
+            <div style="color: #ef4444;">Failed to load widget</div>
+            <div style="font-size: 0.875rem;">Make sure to run: pnpm --filter @foodics/labeeb-chat build:widget</div>
+            <div style="font-size: 0.75rem; color: #6b7280;">${error.message}</div>
+          </div>
+        `;
+        logEvent('error', { message: error.message });
+      }
+    };
+  </script>
+</body>
+</html>
