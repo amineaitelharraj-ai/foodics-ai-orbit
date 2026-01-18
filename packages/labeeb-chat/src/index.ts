@@ -6,10 +6,7 @@
 // export { default as LabeebChatProvider } from './LabeebChatProvider.vue';
 
 // Composables
-// export { useLabeebWebSocket } from './composables/useLabeebWebSocket';
-// export { useLabeebChat } from './composables/useLabeebChat';
-// export { useLabeebSession } from './composables/useLabeebSession';
-// export { useLabeebAuth } from './composables/useLabeebAuth';
+export * from './composables';
 
 // Types
 export * from './types';
