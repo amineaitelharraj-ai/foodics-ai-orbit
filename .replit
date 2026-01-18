@@ -41,3 +41,9 @@ externalPort = 3000
 deploymentTarget = "static"
 build = ["pnpm", "build"]
 publicDir = "apps/orbit/dist"
+
+[userenv]
+
+[userenv.shared]
+VITE_COGNITO_USER_POOL_ID = "eu-west-1_4KVGPeV6s"
+VITE_COGNITO_CLIENT_ID = "71a7nhh8g9sftcfogv9ul35nhu"
