@@ -52,15 +52,24 @@ const router = createRouter({
 
 // Navigation guard for authentication
 router.beforeEach((to, _from, next) => {
-  const authStore = useAuthStore();
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth !== false);
+  try {
+    const authStore = useAuthStore();
+    const requiresAuth = to.matched.some((record) => record.meta.requiresAuth !== false);
 
-  if (requiresAuth && !authStore.isAuthenticated) {
-    next({ name: 'Login', query: { redirect: to.fullPath } });
-  } else if (to.name === 'Login' && authStore.isAuthenticated) {
-    next({ name: 'Assistant' });
-  } else {
-    next();
+    if (requiresAuth && !authStore.isAuthenticated) {
+      next({ name: 'Login', query: { redirect: to.fullPath } });
+    } else if (to.name === 'Login' && authStore.isAuthenticated) {
+      next({ name: 'Assistant' });
+    } else {
+      next();
+    }
+  } catch (error) {
+    console.error('Router guard error:', error);
+    if (to.name !== 'Login') {
+      next({ name: 'Login' });
+    } else {
+      next();
+    }
   }
 });
 
