@@ -6,6 +6,25 @@
 export { default as LabeebChatProvider } from './LabeebChatProvider.vue';
 export type { LabeebChatProviderProps } from './LabeebChatProvider.vue';
 
+// Chat UI Components
+export {
+  ChatInput,
+  MessageBubble,
+  MessageList,
+  StreamingIndicator,
+  QueryClarification,
+  StructuredResponse,
+} from './components';
+
+// Re-export component types
+export type {
+  Pagination,
+  ChartConfig,
+  DisplayType,
+  WriteResult,
+  StructuredResponseData,
+} from './components';
+
 // Composables
 export * from './composables';
 

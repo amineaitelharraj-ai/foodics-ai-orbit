@@ -12,6 +12,12 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 'latest',
   },
+  ignorePatterns: [
+    'dist',
+    'node_modules',
+    '*.d.ts',
+    'react-reference',
+  ],
   rules: {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'error',
