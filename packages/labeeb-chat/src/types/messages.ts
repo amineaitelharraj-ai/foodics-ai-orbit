@@ -75,7 +75,7 @@ export type ClientMessage =
     }
   | { type: 'ping' };
 
-export interface ToolStatus {
+export interface ToolStatusEvent {
   name: string;
   status: 'running' | 'completed' | 'error';
   message?: string;
