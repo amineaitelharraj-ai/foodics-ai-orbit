@@ -1,0 +1,19 @@
+{
+  "name": "@foodics/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./api/labeeb-client.ts",
+  "types": "./api/labeeb-client.ts",
+  "exports": {
+    "./api/*": "./api/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts --fix",
+    "clean": "rm -rf node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
