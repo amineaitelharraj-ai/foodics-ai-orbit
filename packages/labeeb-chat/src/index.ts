@@ -1,8 +1,9 @@
 // Labeeb Chat - Vue 3 Widget Package
 // Main entry point for the package
 
-// Components
-// export { default as LabeebChat } from './LabeebChat.vue';
+// Main Components
+export { default as LabeebChat } from './LabeebChat.vue';
+export type { LabeebChatProps } from './LabeebChat.vue';
 export { default as LabeebChatProvider } from './LabeebChatProvider.vue';
 export type { LabeebChatProviderProps } from './LabeebChatProvider.vue';
 

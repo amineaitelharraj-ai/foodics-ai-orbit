@@ -6,7 +6,7 @@ import MessageBubble from './MessageBubble.vue';
 import StreamingIndicator from './StreamingIndicator.vue';
 
 export interface MessageListProps {
-  messages: Message[];
+  messages: readonly Message[] | Message[];
   streamingContent: string;
   toolStatus: ToolStatus | null;
   isLoading: boolean;

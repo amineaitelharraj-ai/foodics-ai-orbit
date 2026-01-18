@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { X } from 'lucide-vue-next'
 
-interface SuggestedFilter {
+export interface SuggestedFilter {
   name: string
   description: string
 }
@@ -11,7 +11,7 @@ interface Props {
   sessionId: string
   toolName: string
   message: string
-  suggestedFilters: SuggestedFilter[]
+  suggestedFilters: readonly SuggestedFilter[] | SuggestedFilter[]
 }
 
 const props = defineProps<Props>()
