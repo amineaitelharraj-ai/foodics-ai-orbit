@@ -1,0 +1,189 @@
+Labeeb WebSocket Proxy - Integration Guide for Replit
+
+  Overview
+
+  The WebSocket proxy bridges browser clients to AgentCore. It exists because:
+  - Browsers cannot add HTTP headers to WebSocket connections
+  - AgentCore requires Authorization: Bearer <token> header
+  - Solution: Proxy accepts token as query parameter, forwards to AgentCore with header
+
+  Browser                         Proxy (Fargate)                    AgentCore
+     |                                 |                                  |
+     |-- ws://?token=xxx ------------->|                                  |
+     |                                 |-- wss:// + Auth header --------->|
+     |<-------------- bidirectional message forwarding ------------------>|
+
+  ---
+  Authentication Flow
+
+  1. User logs in via Cognito → Gets accessToken
+  2. Browser connects to proxy with token in query string
+  3. Proxy validates JWT against Cognito JWKS
+  4. Proxy connects to AgentCore with Authorization: Bearer header
+  5. Messages forwarded bidirectionally until either side disconnects
+
+  ---
+  Connection Details
+  ┌─────────────────┬───────────────────────────────────────────────────────────────────────┐
+  │     Setting     │                                 Value                                 │
+  ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
+  │ Proxy URL       │ ws://Labeeb-Servi-WqxKpTaxpSEK-1382785740.eu-west-1.elb.amazonaws.com │
+  ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
+  │ Protocol        │ ws:// (HTTP) - will upgrade to wss:// for production                  │
+  ├─────────────────┼───────────────────────────────────────────────────────────────────────┤
+  │ Token Parameter │ ?token=<cognito_access_token>                                         │
+  └─────────────────┴───────────────────────────────────────────────────────────────────────┘
+  Cognito Settings:
+  ┌───────────────┬────────────────────────────┐
+  │    Setting    │           Value            │
+  ├───────────────┼────────────────────────────┤
+  │ Region        │ eu-west-1                  │
+  ├───────────────┼────────────────────────────┤
+  │ User Pool ID  │ eu-west-1_I2ifBfqfX        │
+  ├───────────────┼────────────────────────────┤
+  │ Web Client ID │ 5ql82r37n9kqhhp65btsi8dlc6 │
+  └───────────────┴────────────────────────────┘
+  ---
+  JavaScript Example
+
+  // 1. Get Cognito access token (after user login)
+  const accessToken = cognitoUser.getAccessToken().getJwtToken();
+
+  // 2. Connect to proxy
+  const PROXY_URL = 'ws://Labeeb-Servi-WqxKpTaxpSEK-1382785740.eu-west-1.elb.amazonaws.com';
+  const ws = new WebSocket(`${PROXY_URL}/?token=${accessToken}`);
+
+  // 3. Connection opened
+  ws.onopen = () => {
+    console.log('Connected to Labeeb');
+
+    // Send a message
+    ws.send(JSON.stringify({
+      type: 'message',
+      message: {
+        role: 'user',
+        content: 'Hello, what can you help me with?'
+      }
+    }));
+  };
+
+  // 4. Receive messages (streaming tokens)
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'token') {
+      // Streaming text token
+      const text = data.content[0]?.text || '';
+      console.log('Token:', text);
+      // Append to UI...
+    } else if (data.type === 'tool_call') {
+      // Agent is calling a tool
+      console.log('Tool call:', data);
+    } else if (data.type === 'tool_result') {
+      // Tool returned result
+      console.log('Tool result:', data);
+    } else if (data.type === 'end') {
+      // Response complete
+      console.log('Response complete');
+    }
+  };
+
+  // 5. Handle errors
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+
+  // 6. Connection closed
+  ws.onclose = (event) => {
+    console.log(`Connection closed: ${event.code} - ${event.reason}`);
+
+    // Handle specific close codes
+    if (event.code === 4001) console.error('Missing token');
+    if (event.code === 4002) console.error('Token expired');
+    if (event.code === 4003) console.error('Invalid token audience');
+    if (event.code === 4004) console.error('Invalid token');
+    if (event.code === 4005) console.error('AgentCore connection failed');
+  };
+
+  ---
+  Message Formats
+
+  Sending a message (Client → AgentCore):
+  {
+    "type": "message",
+    "message": {
+      "role": "user",
+      "content": "List all product categories"
+    }
+  }
+
+  Receiving streaming tokens (AgentCore → Client):
+  {"type": "token", "content": [{"type": "text", "text": "Here", "index": 0}]}
+  {"type": "token", "content": [{"type": "text", "text": " are", "index": 0}]}
+  {"type": "token", "content": [{"type": "text", "text": " the", "index": 0}]}
+  {"type": "token", "content": [{"type": "text", "text": " categories", "index": 0}]}
+
+  Tool calls (when agent uses Foodics API):
+  {
+    "type": "tool_call",
+    "tool_name": "list_categories",
+    "tool_input": {}
+  }
+
+  Human-in-the-Loop confirmation (for write operations):
+  {
+    "type": "confirmation_request",
+    "tool_name": "create_product",
+    "tool_input": {
+      "name": "New Latte",
+      "price": 25,
+      "category_id": "xxx"
+    },
+    "message": "Do you want to create this product?"
+  }
+
+  Responding to confirmation:
+  {
+    "type": "confirmation_response",
+    "confirmed": true
+  }
+
+  ---
+  Error Codes (WebSocket Close Codes)
+  ┌──────┬──────────────────────────────────────────┐
+  │ Code │                 Meaning                  │
+  ├──────┼──────────────────────────────────────────┤
+  │ 4001 │ Missing token parameter                  │
+  ├──────┼──────────────────────────────────────────┤
+  │ 4002 │ Token expired                            │
+  ├──────┼──────────────────────────────────────────┤
+  │ 4003 │ Invalid token audience/client_id         │
+  ├──────┼──────────────────────────────────────────┤
+  │ 4004 │ Invalid token (malformed, bad signature) │
+  ├──────┼──────────────────────────────────────────┤
+  │ 4005 │ Failed to connect to AgentCore           │
+  └──────┴──────────────────────────────────────────┘
+  ---
+  Health Check
+
+  curl http://Labeeb-Servi-WqxKpTaxpSEK-1382785740.eu-west-1.elb.amazonaws.com/health
+  # Response: OK
+  #           Active connections: 0
+
+  ---
+  Important Notes
+
+  1. Token in URL: The access token is visible in the URL. This is acceptable for testing but we'll upgrade to WSS (encrypted) for production.
+  2. Token Expiration: Cognito access tokens expire after 1 hour. Handle 4002 close code by refreshing the token and reconnecting.
+  3. Reconnection: If connection drops, get a fresh token and reconnect. Don't reuse expired tokens.
+  4. Message Streaming: AgentCore streams responses token-by-token. Accumulate token messages to build the full response.
+  5. HITL Confirmations: Write operations (create/update/delete) will send a confirmation_request. The UI must show this to the user and send back a confirmation_response.
+
+  ---
+  Quick Test (from browser console)
+
+  // Replace with actual token from Cognito login
+  const token = 'eyJraWQiOi...';
+  const ws = new WebSocket(`ws://Labeeb-Servi-WqxKpTaxpSEK-1382785740.eu-west-1.elb.amazonaws.com/?token=${token}`);
+  ws.onmessage = (e) => console.log(JSON.parse(e.data));
+  ws.onopen = () => ws.send(JSON.stringify({type:'message',message:{role:'user',content:'hello'}}));

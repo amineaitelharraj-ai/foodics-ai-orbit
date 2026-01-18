@@ -1,0 +1,112 @@
+ The backend protocol (from SSM /labeeb/v1/dev/frontend/config) is:
+  server_to_client: ["token", "interrupt", "complete", "approval_ack", "error", "pong"]
+
+  But the frontend code expects a different protocol. Here are the fixes:
+
+  ---
+  Fix 1: src/services/labeeb-api.ts - Update WebSocketMessage type (around line 40)
+
+  Current:
+  type WebSocketMessage =
+    | { type: 'token'; content: Array<{ type: string; text: string; index: number }> }
+    | { type: 'tool_call'; tool_name: string; tool_input: Record<string, unknown> }
+    | { type: 'tool_result'; result: unknown }
+    | { type: 'confirmation_request'; tool_name: string; tool_input: Record<string, unknown>; message: string }
+    | { type: 'end' }
+    | { type: 'error'; message: string; pending_tool?: string }
+    | { type: 'pong' }
+
+  Change to:
+  type WebSocketMessage =
+    | { type: 'token'; content: string }  // Backend sends string, not array
+    | { type: 'interrupt'; session_id: string; action: string; tool_name: string; preview: string; arguments: Record<string, unknown> }
+    | { type: 'complete'; session_id: string }  // Backend sends 'complete', not 'end'
+    | { type: 'approval_ack'; session_id: string; decision: string }
+    | { type: 'error'; message: string; pending_tool?: string }
+    | { type: 'pong' }
+
+  ---
+  Fix 2: src/services/labeeb-api.ts - Update handleMessage (around line 140)
+
+  Current:
+  private handleMessage(data: WebSocketMessage): void {
+    switch (data.type) {
+      case 'token':
+        const text = data.content?.[0]?.text || ''
+        if (text) {
+          this.options.onToken?.(text)
+        }
+        break
+      // ... other cases ...
+      case 'end':
+        this.options.onComplete?.(this.sessionId || '')
+        break
+
+  Change to:
+  private handleMessage(data: WebSocketMessage): void {
+    switch (data.type) {
+      case 'token':
+        // Backend sends content as string directly
+        const text = typeof data.content === 'string'
+          ? data.content
+          : (data.content as any)?.[0]?.text || ''
+        if (text) {
+          this.options.onToken?.(text)
+        }
+        break
+      case 'interrupt':
+        // HITL approval request from backend
+        this.options.onInterrupt?.({
+          session_id: data.session_id,
+          action: data.action,
+          tool_name: data.tool_name,
+          preview: data.preview,
+          arguments: data.arguments
+        })
+        break
+      case 'complete':  // Changed from 'end' to 'complete'
+        this.options.onComplete?.(data.session_id || this.sessionId || '')
+        break
+      case 'approval_ack':
+        this.options.onApprovalAck?.({
+          session_id: data.session_id,
+          processed: true
+        })
+        break
+      case 'error':
+        const error: LabeebError = new Error(data.message) as LabeebError
+        if (data.pending_tool) {
+          error.pendingTool = data.pending_tool
+        }
+        this.options.onError?.(error)
+        break
+      case 'pong':
+        break
+    }
+  }
+
+  ---
+  Fix 3: Update message sending format (around line 180)
+
+  The sendMessage and approve methods look correct, but verify they match:
+
+  Message format:
+  // For sending user message
+  { type: 'message', content: 'text', session_id: 'xxx' }
+
+  // For approval
+  { type: 'approve', session_id: 'xxx', decision: 'approve' | 'reject', reason?: 'optional' }
+
+  ---
+  Summary of Changes
+  ┌──────────────────┬────────────────────────┬────────────────┐
+  │      Issue       │          Was           │   Should Be    │
+  ├──────────────────┼────────────────────────┼────────────────┤
+  │ Token content    │ Array<{text: string}>  │ string         │
+  ├──────────────────┼────────────────────────┼────────────────┤
+  │ Completion event │ 'end'                  │ 'complete'     │
+  ├──────────────────┼────────────────────────┼────────────────┤
+  │ Interrupt event  │ 'confirmation_request' │ 'interrupt'    │
+  ├──────────────────┼────────────────────────┼────────────────┤
+  │ Approval event   │ custom                 │ 'approval_ack' │
+  └──────────────────┴────────────────────────┴────────────────┘

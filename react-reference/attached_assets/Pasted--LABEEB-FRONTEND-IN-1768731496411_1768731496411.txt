@@ -1,0 +1,1133 @@
+================================================================================
+LABEEB FRONTEND INTEGRATION GUIDE
+HITL Preview System + AI Image Generation
+================================================================================
+
+Date: 2026-01-18
+Branch: feature/image-generation
+
+This document contains everything needed to implement:
+1. Inline HITL (Human-in-the-Loop) Preview Cards
+2. REST API for AI Image Generation
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+PART 1: Overview & Design Philosophy
+PART 2: WebSocket Protocol
+PART 3: TypeScript Interfaces (All 13 Preview Types)
+PART 4: Card Designs with ASCII Mockups
+PART 5: Operation-Specific Styling
+PART 6: REST API for AI Image Generation
+PART 7: Implementation Code Examples
+PART 8: Complete Flow Example
+PART 9: Best Practices
+
+================================================================================
+PART 1: OVERVIEW & DESIGN PHILOSOPHY
+================================================================================
+
+WHAT IS HITL?
+-------------
+When the AI agent attempts a write operation (create, update, delete, etc.):
+1. Backend generates a rich preview of the operation
+2. Execution pauses via LangGraph interrupt()
+3. Frontend receives preview and displays confirmation UI
+4. User approves or rejects
+5. Backend executes (if approved) or cancels (if rejected)
+
+DESIGN APPROACH: INLINE CARDS (NOT POPUPS)
+------------------------------------------
+HITL confirmations should be rendered INLINE within the chat flow, not as
+modal popups. This provides:
+
+- Conversation history: Users can scroll back to see what they approved/rejected
+- Natural flow: HITL is part of the conversation, not an interruption
+- Audit trail: Clear record of all actions taken
+- Better UX: No modal fatigue
+
+The card stays in chat history after approval/rejection with updated status.
+
+================================================================================
+PART 2: WEBSOCKET PROTOCOL
+================================================================================
+
+CLIENT -> SERVER MESSAGES:
+--------------------------
+
+// Send user message
+{
+  "type": "message",
+  "content": "Create a burger for SAR 42",
+  "session_id": "session-xxx"
+}
+
+// Approve HITL action
+{
+  "type": "approve",
+  "session_id": "session-xxx"
+}
+
+// Reject HITL action
+{
+  "type": "reject",
+  "session_id": "session-xxx",
+  "reason": "Wrong price"  // Optional
+}
+
+// Ping (keepalive)
+{
+  "type": "ping"
+}
+
+
+SERVER -> CLIENT MESSAGES:
+--------------------------
+
+// Streaming token (assistant typing)
+{
+  "type": "token",
+  "content": "Hello"
+}
+
+// Tool execution started
+{
+  "type": "tool_start",
+  "tool_name": "Foodics___create_product",
+  "message": "Creating product..."
+}
+
+// Tool execution ended
+{
+  "type": "tool_end",
+  "tool_name": "Foodics___create_product"
+}
+
+// HITL interrupt - RENDER AS INLINE CARD
+{
+  "type": "interrupt",
+  "session_id": "session-xxx",
+  "tool_name": "Foodics___create_product",
+  "action": "create_product",
+  "preview": {
+    "type": "product_preview",
+    "version": "1.0",
+    "operation": "create",
+    "product": { ... }
+  },
+  "arguments": { ... }  // Raw args as fallback
+}
+
+// HITL approval acknowledged
+{
+  "type": "approval_ack",
+  "session_id": "xxx",
+  "decision": "approved"
+}
+
+// Response complete
+{
+  "type": "complete",
+  "session_id": "xxx"
+}
+
+// Error
+{
+  "type": "error",
+  "message": "Something went wrong",
+  "pending_tool": "..."
+}
+
+// Pong (keepalive response)
+{
+  "type": "pong"
+}
+
+
+================================================================================
+PART 3: TYPESCRIPT INTERFACES
+================================================================================
+
+BASE STRUCTURE:
+---------------
+
+interface HITLPreview {
+  type: string;              // Preview type (e.g., "product_preview")
+  version: string;           // Schema version (e.g., "1.0")
+  operation: string;         // Operation type (create, update, delete, etc.)
+  [entity]: EntityData;      // Entity-specific data
+}
+
+------------------------------------------------------------------------------
+3.1 PRODUCT PREVIEW
+------------------------------------------------------------------------------
+
+interface ProductPreview {
+  type: "product_preview";
+  version: "1.0";
+  operation: "create" | "update" | "delete" | "restore";
+  product: {
+    id?: string;
+    name: string;
+    description?: string;
+    name_localized?: string;
+    price?: { amount: number; currency: string };
+    cost_price?: { amount: number; currency: string };
+    category?: { id: string; name: string };
+    sku?: string;
+    barcode?: string;
+    image_url?: string;        // AI-generated or uploaded image
+    tax_group_id?: string;
+    is_active: boolean;
+  };
+  combo_options?: Array<{
+    name: string;
+    type: string;
+    price?: { amount: number; currency: string };
+    quantity?: number;
+  }>;
+  modifiers?: Array<{
+    name: string;
+    type: "modifier";
+    price_delta?: { amount: number; currency: string };
+    is_default?: boolean;
+  }>;
+  pricing_options?: {
+    discount?: number;
+    min_quantity?: number;
+    max_quantity?: number;
+  };
+}
+
+------------------------------------------------------------------------------
+3.2 CATEGORY PREVIEW
+------------------------------------------------------------------------------
+
+interface CategoryPreview {
+  type: "category_preview";
+  version: "1.0";
+  operation: "create" | "update" | "delete" | "restore";
+  category: {
+    id?: string;
+    name: string;
+    name_localized?: string;
+    reference?: string;
+    color?: string;
+    is_active: boolean;
+    parent?: { id: string; name?: string };
+  };
+}
+
+------------------------------------------------------------------------------
+3.3 MODIFIER PREVIEW
+------------------------------------------------------------------------------
+
+interface ModifierPreview {
+  type: "modifier_preview";
+  version: "1.0";
+  operation: "create" | "update" | "delete" | "restore" | "attach" | "detach";
+  modifier: {
+    id?: string;
+    name: string;
+    name_localized?: string;
+    reference?: string;
+    price?: { amount: number; currency: string };
+    is_active: boolean;
+  };
+  product?: { id: string; name?: string };  // For attach/detach operations
+  options?: any[];
+}
+
+------------------------------------------------------------------------------
+3.4 BRANCH PREVIEW
+------------------------------------------------------------------------------
+
+interface BranchPreview {
+  type: "branch_preview";
+  version: "1.0";
+  operation: "update" | "delete";
+  branch: {
+    id: string;
+    name: string;
+    name_localized?: string;
+    reference?: string;
+    phone?: string;
+    address?: string;
+    is_active: boolean;
+  };
+}
+
+------------------------------------------------------------------------------
+3.5 SUPPLIER PREVIEW
+------------------------------------------------------------------------------
+
+interface SupplierPreview {
+  type: "supplier_preview";
+  version: "1.0";
+  operation: "create" | "update" | "delete" | "restore" | "attach" | "detach";
+  supplier: {
+    id?: string;
+    name: string;
+    code?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    is_active: boolean;
+  };
+  item?: {
+    id: string;
+    name?: string;
+    price?: { amount: number; currency: string };
+  };
+}
+
+------------------------------------------------------------------------------
+3.6 CUSTOMER PREVIEW
+------------------------------------------------------------------------------
+
+interface CustomerPreview {
+  type: "customer_preview";
+  version: "1.0";
+  operation: "create" | "blacklist" | "unblacklist" | "update" | "add_tag" | "remove_tag";
+  customer: {
+    id?: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    loyalty_number?: string;
+    is_blacklisted?: boolean;
+  };
+  tag?: {
+    id?: string;
+    name: string;
+  };
+  house_account?: {
+    balance?: { amount: number; currency: string };
+    credit_limit?: { amount: number; currency: string };
+  };
+}
+
+------------------------------------------------------------------------------
+3.7 COMBO PREVIEW
+------------------------------------------------------------------------------
+
+interface ComboPreview {
+  type: "combo_preview";
+  version: "1.0";
+  operation: "add_product" | "remove_product" | "update_product" |
+             "add_modifier" | "remove_modifier" | "activate" | "deactivate";
+  combo: {
+    id: string;
+    name?: string;
+    description?: string;
+    price?: { amount: number; currency: string };
+    is_active: boolean;
+  };
+  product?: {
+    id: string;
+    name?: string;
+    quantity?: number;
+    price?: { amount: number; currency: string };
+    is_required?: boolean;
+  };
+  modifier?: {
+    id: string;
+    name?: string;
+    price?: { amount: number; currency: string };
+  };
+}
+
+------------------------------------------------------------------------------
+3.8 POINTS PREVIEW
+------------------------------------------------------------------------------
+
+interface PointsPreview {
+  type: "points_preview";
+  version: "1.0";
+  operation: "award" | "redeem";
+  action: "award" | "redeem";
+  customer: {
+    id: string;
+    name?: string;
+    email?: string;
+    loyalty_number?: string;
+  };
+  points: {
+    amount: number;
+    current_balance?: number;
+    new_balance?: number;
+  };
+  reason?: string;
+}
+
+------------------------------------------------------------------------------
+3.9 LOYALTY PROGRAM PREVIEW
+------------------------------------------------------------------------------
+
+interface LoyaltyProgramPreview {
+  type: "loyalty_program_preview";
+  version: "1.0";
+  operation: "create" | "update" | "delete";
+  program: {
+    id?: string;
+    name: string;
+    description?: string;
+    is_active: boolean;
+  };
+  points_config?: {
+    points_per_currency?: number;
+    currency_per_point?: number;
+    min_spend?: { amount: number; currency: string };
+  };
+  expiration?: {
+    days?: number;
+    date?: string;
+  };
+}
+
+------------------------------------------------------------------------------
+3.10 LOYALTY REWARD PREVIEW
+------------------------------------------------------------------------------
+
+interface LoyaltyRewardPreview {
+  type: "loyalty_reward_preview";
+  version: "1.0";
+  operation: "create" | "update";
+  reward: {
+    id?: string;
+    name: string;
+    description?: string;
+    points_cost: number;
+    reward_type: string;
+    value?: { amount: number; currency: string };
+    is_active: boolean;
+  };
+  program?: {
+    id: string;
+    name?: string;
+  };
+}
+
+------------------------------------------------------------------------------
+3.11 PROMOTION PREVIEW
+------------------------------------------------------------------------------
+
+interface PromotionPreview {
+  type: "promotion_preview";
+  version: "1.0";
+  operation: "add_product" | "remove_product" | "add_category" | "remove_category" |
+             "activate" | "deactivate" | "extend";
+  promotion: {
+    id: string;
+    name?: string;
+    description?: string;
+    discount_type?: "percentage" | "fixed";
+    discount_value?: string;  // "10%" or formatted currency
+    is_active: boolean;
+  };
+  product?: {
+    id: string;
+    name?: string;
+    price?: { amount: number; currency: string };
+  };
+  category?: {
+    id: string;
+    name?: string;
+  };
+  schedule?: {
+    current_end_date?: string;
+    new_end_date?: string;
+    extension_days?: number;
+  };
+}
+
+------------------------------------------------------------------------------
+3.12 INVENTORY TRANSACTION PREVIEW
+------------------------------------------------------------------------------
+
+interface InventoryTransactionPreview {
+  type: "inventory_transaction_preview";
+  version: "1.0";
+  operation: "create";
+  transaction: {
+    type: "in" | "out" | "adjustment";
+    reason?: string;
+    reference?: string;
+  };
+  item: {
+    id: string;
+    name?: string;
+    sku?: string;
+    unit?: string;
+  };
+  quantity: {
+    amount: number;
+    direction: "in" | "out";
+    current_stock?: number;
+    new_stock?: number;
+  };
+  branch?: {
+    id: string;
+    name?: string;
+  };
+}
+
+------------------------------------------------------------------------------
+3.13 INVENTORY COUNT PREVIEW
+------------------------------------------------------------------------------
+
+interface InventoryCountPreview {
+  type: "inventory_count_preview";
+  version: "1.0";
+  operation: "create";
+  count: {
+    reference?: string;
+    date?: string;
+    notes?: string;
+  };
+  items?: Array<{
+    id: string;
+    name?: string;
+    expected_quantity?: number;
+    counted_quantity?: number;
+  }>;
+  branch?: {
+    id: string;
+    name?: string;
+  };
+}
+
+
+================================================================================
+PART 4: CARD DESIGNS WITH ASCII MOCKUPS
+================================================================================
+
+All cards share these properties:
+- Rendered INLINE in chat (not as popup modal)
+- Status indicator (pending/approved/rejected)
+- Approve/Reject buttons (when pending)
+- Scrollable in chat history
+- Status updates in place after user action
+
+------------------------------------------------------------------------------
+4.1 PRODUCT CARD (type: "product_preview")
+------------------------------------------------------------------------------
+Operations: create, update, delete, restore
+
++--------------------------------------------------+
+|  [Upload]   Truffle Burger                       |
+|  [Generate] Burgers                              |
+|             SAR 42        [Creating...]          |
+|                                                  |
+|  Combo Options                                   |
+|  [French Fries] [Coca Cola]                      |
+|                                                  |
+|  Modifiers                                       |
+|  - Extra Cheese (+SAR 5)                         |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+Fields to display:
+- Image placeholder with Upload/Generate buttons
+- product.name (title)
+- product.category.name (subtitle)
+- product.price.amount + currency (badge)
+- product.description (if present)
+- combo_options[] as chips (if present)
+- modifiers[] as list (if present)
+
+------------------------------------------------------------------------------
+4.2 CATEGORY CARD (type: "category_preview")
+------------------------------------------------------------------------------
+Operations: create, update, delete, restore
+
++--------------------------------------------------+
+|  Create Category                                 |
+|                                                  |
+|  [Color] Desserts                [Creating...]   |
+|          Reference: desserts-main                |
+|          Parent: Food Menu                       |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+Fields to display:
+- category.name with color indicator (category.color)
+- category.reference
+- category.parent.name (if present)
+
+------------------------------------------------------------------------------
+4.3 CUSTOMER CARD (type: "customer_preview")
+------------------------------------------------------------------------------
+Operations: create, blacklist, unblacklist, add_tag, remove_tag
+
++--------------------------------------------------+
+|  Create Customer                                 |
+|                                                  |
+|  Ahmed Al-Hassan                  [Creating...]  |
+|  Email: ahmed@email.com                          |
+|  Phone: +966 50 123 4567                         |
+|  Adding tag: [VIP]                               |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+For blacklist operations: Use red/warning border styling.
+
+------------------------------------------------------------------------------
+4.4 POINTS CARD (type: "points_preview")
+------------------------------------------------------------------------------
+Operations: award, redeem
+
++--------------------------------------------------+
+|  Award Points                                    |
+|                                                  |
+|  Customer: Ahmed Al-Hassan        [Awarding...]  |
+|                                                  |
+|  +500 points                                     |
+|  Current: 1,200 -> New: 1,700                    |
+|                                                  |
+|  Reason: Birthday bonus                          |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+For redeem: Show "-" instead of "+" and use orange color.
+
+------------------------------------------------------------------------------
+4.5 LOYALTY PROGRAM CARD (type: "loyalty_program_preview")
+------------------------------------------------------------------------------
+Operations: create, update, delete
+
++--------------------------------------------------+
+|  Create Loyalty Program                          |
+|                                                  |
+|  Gold Rewards Program             [Creating...]  |
+|                                                  |
+|  - 1 point per SAR 10 spent                      |
+|  - Points expire in 365 days                     |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.6 LOYALTY REWARD CARD (type: "loyalty_reward_preview")
+------------------------------------------------------------------------------
+Operations: create, update
+
++--------------------------------------------------+
+|  Create Reward                                   |
+|                                                  |
+|  Free Dessert                     [Creating...]  |
+|  Program: Gold Rewards                           |
+|                                                  |
+|  Cost: 500 points                                |
+|  Value: SAR 25 discount                          |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.7 PROMOTION CARD (type: "promotion_preview")
+------------------------------------------------------------------------------
+Operations: add_product, remove_product, add_category, activate, deactivate, extend
+
++--------------------------------------------------+
+|  Activate Promotion                              |
+|                                                  |
+|  Summer Sale 20%                 [Activating...] |
+|  Discount: 20% off                               |
+|                                                  |
+|  Adding product: Truffle Burger                  |
+|                                                  |
+|  Schedule: Extending to Jan 31                   |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.8 COMBO CARD (type: "combo_preview")
+------------------------------------------------------------------------------
+Operations: add_product, remove_product, update_product, add_modifier, activate
+
++--------------------------------------------------+
+|  Update Combo                                    |
+|                                                  |
+|  Family Meal Deal                 [Updating...]  |
+|  Price: SAR 89                                   |
+|                                                  |
+|  Adding: Large Fries (qty: 2)                    |
+|  Modifier: Extra sauce                           |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.9 MODIFIER CARD (type: "modifier_preview")
+------------------------------------------------------------------------------
+Operations: create, update, delete, attach, detach
+
++--------------------------------------------------+
+|  Attach Modifier                                 |
+|                                                  |
+|  Extra Cheese (+SAR 5)           [Attaching...]  |
+|                                                  |
+|  Attaching to: Truffle Burger                    |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.10 BRANCH CARD (type: "branch_preview")
+------------------------------------------------------------------------------
+Operations: update, delete
+
++--------------------------------------------------+
+|  Update Branch                                   |
+|                                                  |
+|  Riyadh - Olaya Branch            [Updating...]  |
+|  Phone: +966 11 234 5678                         |
+|  Address: King Fahd Road, Olaya District         |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.11 SUPPLIER CARD (type: "supplier_preview")
+------------------------------------------------------------------------------
+Operations: create, update, delete, attach, detach
+
++--------------------------------------------------+
+|  Create Supplier                                 |
+|                                                  |
+|  Fresh Foods Co.                  [Creating...]  |
+|  Code: SUP-001                                   |
+|  Email: orders@freshfoods.com                    |
+|  Phone: +966 12 345 6789                         |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+------------------------------------------------------------------------------
+4.12 INVENTORY TRANSACTION CARD (type: "inventory_transaction_preview")
+------------------------------------------------------------------------------
+Operations: create (stock in/out/adjustment)
+
++--------------------------------------------------+
+|  Stock Adjustment                                |
+|                                                  |
+|  Tomatoes (kg)                   [Adjusting...]  |
+|  Branch: Riyadh Main                             |
+|                                                  |
+|  [+50 units]  IN                                 |
+|  Current: 100 -> New: 150                        |
+|                                                  |
+|  Reason: New delivery received                   |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+For OUT transactions: Show red "-" indicator.
+
+------------------------------------------------------------------------------
+4.13 INVENTORY COUNT CARD (type: "inventory_count_preview")
+------------------------------------------------------------------------------
+Operations: create (stock take)
+
++--------------------------------------------------+
+|  Stock Count                                     |
+|                                                  |
+|  Stock Take #ST-2026-001          [Creating...]  |
+|  Branch: Riyadh Main                             |
+|  Date: 2026-01-18                                |
+|                                                  |
+|  Items:                                          |
+|  - Tomatoes: Expected 100, Counted 95            |
+|  - Onions: Expected 50, Counted 52               |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+
+================================================================================
+PART 5: OPERATION-SPECIFIC STYLING
+================================================================================
+
+| Operation   | Icon | Color   | Status Text      |
+|-------------|------|---------|------------------|
+| create      | +    | Green   | "Creating..."    |
+| update      | Edit | Blue    | "Updating..."    |
+| delete      | Trash| Red     | "Deleting..."    |
+| restore     | Undo | Yellow  | "Restoring..."   |
+| activate    | Check| Green   | "Activating..."  |
+| deactivate  | Pause| Gray    | "Deactivating..."|
+| award       | +    | Green   | "Awarding..."    |
+| redeem      | -    | Orange  | "Redeeming..."   |
+| attach      | Link | Blue    | "Attaching..."   |
+| detach      | Cut  | Orange  | "Detaching..."   |
+| blacklist   | Block| Red     | "Blacklisting..."|
+| unblacklist | Check| Green   | "Removing..."    |
+
+CARD STATUS STATES:
+-------------------
+
+| Status   | UI Style                | Buttons          |
+|----------|-------------------------|------------------|
+| pending  | Yellow/amber indicator  | Approve, Reject  |
+| approved | Green "Created" badge   | None (disabled)  |
+| rejected | Red "Rejected" badge    | None (disabled)  |
+
+After approval: Status changes to "Created" / "Updated" / etc.
+After rejection: Card shows "Rejected" with faded/strikethrough style.
+Both states: Card remains in chat history for audit trail.
+
+
+================================================================================
+PART 6: REST API FOR AI IMAGE GENERATION
+================================================================================
+
+A REST API endpoint for generating AI product images using Amazon Nova Canvas.
+
+ENDPOINT:
+---------
+POST https://49891xz0p8.execute-api.eu-west-1.amazonaws.com/dev/v1/media/generate-image
+
+AUTHENTICATION:
+---------------
+Same Cognito token used for WebSocket:
+  Authorization: Bearer {cognito_id_token}
+
+REQUEST:
+--------
+{
+  "prompt": "Professional food photo of a gourmet truffle burger with melted cheese",
+  "style": "food_photography"  // Optional, default: "food_photography"
+}
+
+Available styles:
+- "food_photography" (default) - Professional, appetizing, soft lighting
+- "minimalist" - Clean white background, simple presentation
+- "rustic" - Wooden surfaces, farmhouse style, warm tones
+- "elegant" - Dark background, dramatic lighting, fine dining
+
+RESPONSE (Success):
+-------------------
+{
+  "success": true,
+  "data": {
+    "image_url": "https://s3.../generated/20260118_xxx.png?...",
+    "style": "food_photography",
+    "expires_in": 3600
+  },
+  "message": "Image generated successfully"
+}
+
+RESPONSE (Error):
+-----------------
+{
+  "success": false,
+  "error": "VALIDATION_ERROR",
+  "message": "Missing required field: prompt"
+}
+
+HEALTH CHECK:
+-------------
+GET https://49891xz0p8.execute-api.eu-west-1.amazonaws.com/dev/health
+
+Response:
+{
+  "success": true,
+  "data": { "status": "healthy", "timestamp": "..." },
+  "message": null
+}
+
+
+================================================================================
+PART 7: IMPLEMENTATION CODE EXAMPLES
+================================================================================
+
+HANDLING WEBSOCKET MESSAGES:
+----------------------------
+
+// When receiving interrupt, add as chat message (NOT modal)
+function handleWebSocketMessage(message) {
+  if (message.type === 'interrupt') {
+    // Add HITL card as a chat message
+    addMessageToChat({
+      id: generateId(),
+      type: 'hitl_card',           // Special message type for HITL
+      preview: message.preview,
+      session_id: message.session_id,
+      tool_name: message.tool_name,
+      status: 'pending',           // pending | approved | rejected
+      timestamp: new Date()
+    });
+  }
+}
+
+// Render based on message type
+function renderChatMessage(message) {
+  switch (message.type) {
+    case 'assistant':
+      return <AssistantMessage content={message.content} />;
+
+    case 'hitl_card':
+      return (
+        <HITLCard
+          preview={message.preview}
+          status={message.status}
+          onApprove={() => handleApprove(message.session_id)}
+          onReject={(reason) => handleReject(message.session_id, reason)}
+        />
+      );
+
+    // ... other message types
+  }
+}
+
+// After approval/rejection, update the card status
+function handleApprove(sessionId) {
+  sendWebSocket({ type: 'approve', session_id: sessionId });
+  updateMessageStatus(sessionId, 'approved');
+}
+
+function handleReject(sessionId, reason) {
+  sendWebSocket({ type: 'reject', session_id: sessionId, reason });
+  updateMessageStatus(sessionId, 'rejected');
+}
+
+
+AI IMAGE GENERATION:
+--------------------
+
+async function generateProductImage(productName: string, style?: string): Promise<string> {
+  const token = await getIdToken();
+
+  const response = await fetch(
+    'https://49891xz0p8.execute-api.eu-west-1.amazonaws.com/dev/v1/media/generate-image',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: `Professional food photo of ${productName}, appetizing presentation`,
+        style: style || 'food_photography',
+      }),
+    }
+  );
+
+  const data = await response.json();
+  if (!data.success) throw new Error(data.message);
+  return data.data.image_url;
+}
+
+
+PRODUCT CARD WITH IMAGE GENERATION:
+-----------------------------------
+
+// In product HITL card component:
+const [imageUrl, setImageUrl] = useState(preview.product.image_url);
+const [generating, setGenerating] = useState(false);
+
+const handleGenerateImage = async () => {
+  setGenerating(true);
+  try {
+    const url = await generateProductImage(preview.product.name);
+    setImageUrl(url);
+    // Optionally update the preview object to include the image
+    // so it's sent with approval
+  } catch (error) {
+    showToast('Failed to generate image', 'error');
+  } finally {
+    setGenerating(false);
+  }
+};
+
+return (
+  <div className="hitl-card product">
+    <div className="image-section">
+      {imageUrl ? (
+        <img src={imageUrl} alt={preview.product.name} />
+      ) : (
+        <div className="image-placeholder">
+          <button onClick={handleGenerateImage} disabled={generating}>
+            {generating ? 'Generating...' : 'Generate AI Image'}
+          </button>
+          <button>Upload Image</button>
+        </div>
+      )}
+    </div>
+    <div className="details">
+      <h3>{preview.product.name}</h3>
+      <span className="category">{preview.product.category?.name}</span>
+      <span className="price">{preview.product.price?.currency} {preview.product.price?.amount}</span>
+    </div>
+    <div className="actions">
+      <button className="reject" onClick={() => onReject()}>Reject</button>
+      <button className="approve" onClick={() => onApprove()}>Approve</button>
+    </div>
+  </div>
+);
+
+
+CARD COMPONENT BY PREVIEW TYPE:
+-------------------------------
+
+function HITLCard({ preview, status, onApprove, onReject }) {
+  // Route to appropriate card component based on preview type
+  const CardComponent = {
+    'product_preview': ProductCard,
+    'category_preview': CategoryCard,
+    'customer_preview': CustomerCard,
+    'points_preview': PointsCard,
+    'loyalty_program_preview': LoyaltyProgramCard,
+    'loyalty_reward_preview': LoyaltyRewardCard,
+    'promotion_preview': PromotionCard,
+    'combo_preview': ComboCard,
+    'modifier_preview': ModifierCard,
+    'branch_preview': BranchCard,
+    'supplier_preview': SupplierCard,
+    'inventory_transaction_preview': InventoryTransactionCard,
+    'inventory_count_preview': InventoryCountCard,
+  }[preview.type] || GenericCard;
+
+  return (
+    <CardComponent
+      preview={preview}
+      status={status}
+      onApprove={onApprove}
+      onReject={onReject}
+    />
+  );
+}
+
+
+================================================================================
+PART 8: COMPLETE FLOW EXAMPLE
+================================================================================
+
+User: "Create a truffle burger for SAR 42 with fries combo"
+
+Chat renders:
+
++--------------------------------------------------+
+| [User bubble]                                    |
+| Create a truffle burger for SAR 42 with fries    |
+| combo                                            |
++--------------------------------------------------+
+
++--------------------------------------------------+
+| [Assistant bubble]                               |
+| Perfect! I'll create that for you.               |
++--------------------------------------------------+
+
++--------------------------------------------------+
+| [HITL Card - INLINE, PENDING]                    |
+|                                                  |
+|  [Generate]   Truffle Burger                     |
+|  [ Image  ]   Burgers                            |
+|               SAR 42        [Creating...]        |
+|                                                  |
+|  Combo Options                                   |
+|  [French Fries]                                  |
+|                                                  |
+|  [Reject]                        [Approve]       |
++--------------------------------------------------+
+
+User clicks "Generate Image" -> loading -> image appears
+User clicks "Approve"
+
+Card updates to:
+
++--------------------------------------------------+
+| [HITL Card - APPROVED]                           |
+|                                                  |
+|  [Image]      Truffle Burger                     |
+|               Burgers                            |
+|               SAR 42        [Created]            |
+|                                                  |
+|  Combo Options                                   |
+|  [French Fries]                                  |
++--------------------------------------------------+
+
++--------------------------------------------------+
+| [Assistant bubble]                               |
+| Done! Truffle Burger has been created with       |
+| French Fries combo option.                       |
++--------------------------------------------------+
+
+User can now scroll back to see the approved card in history.
+
+
+================================================================================
+PART 9: BEST PRACTICES
+================================================================================
+
+1. ALWAYS CHECK preview.version
+   - Handle gracefully if version is newer than expected
+   - Log unknown versions for debugging
+
+2. USE FALLBACK RENDERING
+   - If preview.type is unknown, show GenericCard with raw data
+   - Display tool_name and arguments as fallback
+
+3. SHOW LOADING STATES
+   - Image generation takes 5-10 seconds
+   - Show spinner in image placeholder
+   - Disable buttons during loading
+
+4. CACHE PREVIEW TEMPLATES
+   - Preview types are stable
+   - Cache component mappings for performance
+
+5. LOCALIZATION
+   - Use name_localized when available
+   - Fall back to name field
+   - Format prices with correct currency symbol
+
+6. CURRENCY FORMATTING
+   - Price objects include { amount, currency }
+   - Format appropriately: "SAR 42.00"
+
+7. AUDIT TRAIL
+   - Keep approved/rejected cards in chat history
+   - Users should be able to scroll back and see all decisions
+
+8. ERROR HANDLING
+   - Show toast/notification on API errors
+   - Don't remove card on error - show error state
+   - Allow retry for image generation
+
+9. ACCESSIBILITY
+   - Use proper button roles
+   - Include aria-labels for icons
+   - Support keyboard navigation
+
+
+================================================================================
+SUMMARY
+================================================================================
+
+KEY IMPLEMENTATION POINTS:
+1. HITL renders as INLINE CARDS in chat, not modal popups
+2. Cards stay in chat history (scrollable, auditable)
+3. Cards show pending/approved/rejected status
+4. 13 preview types - each with specific card design
+5. Product cards can generate AI images via REST API
+6. Same Cognito auth token for WebSocket and REST API
+
+REST API ENDPOINTS:
+- Health: GET  https://49891xz0p8.execute-api.eu-west-1.amazonaws.com/dev/health
+- Image:  POST https://49891xz0p8.execute-api.eu-west-1.amazonaws.com/dev/v1/media/generate-image
+
+BACKEND PREVIEW BUILDERS:
+- 51 registered builders covering all write operations
+- Unknown tools fall back to GenericPreviewBuilder
+
+================================================================================
+END OF DOCUMENT
+================================================================================

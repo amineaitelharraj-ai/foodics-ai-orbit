@@ -1,0 +1,139 @@
+ 🔧 Replit Instructions: Chat UX Polish Fixes
+
+  Here are the fixes to copy-paste into Replit:
+
+  ---
+  Fix 1: Welcome Message Appears in Loaded Chats
+
+  Problem: When loading a past chat, the welcome message "Hello! I'm your AI assistant..." always appears because localMessages is never cleared.
+
+  File: src/pages/OrbitAssistant.tsx
+
+  Change 1: Add effect to clear localMessages when labeebMessages change (around line 127)
+
+  Find where isLoading is defined and add this effect after it:
+
+  const isLoading = labeebLoading
+
+  // NEW: Clear local welcome message when real messages are loaded
+  useEffect(() => {
+    if (labeebMessages.length > 0) {
+      // Remove the welcome message when we have real conversation
+      setLocalMessages([])
+    }
+  }, [labeebMessages])
+
+  Alternative approach (cleaner): Only show welcome message when there are no labeeb messages.
+
+  In the allMessages definition (around line 116-124), change:
+
+  // BEFORE:
+  const allMessages: LocalMessage[] = [
+    ...localMessages,
+    ...labeebMessages.map(m => ({
+      id: m.id,
+      type: m.role === 'user' ? 'user' as const : 'assistant' as const,
+      content: m.content,
+      timestamp: m.timestamp
+    }))
+  ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+
+  // AFTER:
+  const allMessages: LocalMessage[] = [
+    // Only show welcome message if no real messages
+    ...(labeebMessages.length === 0 ? localMessages : []),
+    ...labeebMessages.map(m => ({
+      id: m.id,
+      type: m.role === 'user' ? 'user' as const : 'assistant' as const,
+      content: m.content,
+      timestamp: m.timestamp
+    }))
+  ].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+
+  ---
+  Fix 2: Markdown Not Rendering
+
+  Problem: Messages show raw **bold** asterisks instead of rendered markdown.
+
+  Step 1: Install react-markdown
+
+  In Replit shell:
+  npm install react-markdown
+
+  Step 2: Add import at top of file
+
+  File: src/pages/OrbitAssistant.tsx
+
+  Add at the top with other imports:
+  import ReactMarkdown from 'react-markdown'
+
+  Step 3: Update renderMessageContent function (around line 1386)
+
+  Find this line:
+  // Default: text message
+  return <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+
+  Replace with:
+  // Default: text message with markdown support
+  return (
+    <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+      <ReactMarkdown
+        components={{
+          // Custom styling for markdown elements
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc pl-4 mb-2">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal pl-4 mb-2">{children}</ol>,
+          li: ({ children }) => <li className="mb-1">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          code: ({ children }) => (
+            <code className="bg-gray-200 dark:bg-gray-600 px-1 py-0.5 rounded text-xs">
+              {children}
+            </code>
+          ),
+          pre: ({ children }) => (
+            <pre className="bg-gray-200 dark:bg-gray-600 p-2 rounded text-xs overflow-x-auto my-2">
+              {children}
+            </pre>
+          ),
+        }}
+      >
+        {msg.content || ''}
+      </ReactMarkdown>
+    </div>
+  )
+
+  ---
+  Fix 3: Streaming Content Also Needs Markdown
+
+  File: src/pages/OrbitAssistant.tsx
+
+  Find the streaming content section (around line 1463-1472):
+  {streamingContent && (
+    <div className="flex justify-start">
+      <div className="max-w-3xl px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+        <div className="whitespace-pre-wrap">{streamingContent}</div>
+
+  Replace with:
+  {streamingContent && (
+    <div className="flex justify-start">
+      <div className="max-w-3xl px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+        <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+          <ReactMarkdown>{streamingContent}</ReactMarkdown>
+        </div>
+
+  ---
+  Summary of Changes
+  ┌─────────────────────────────────┬────────────────────┬─────────────────────────────────────────────────────────┐
+  │              Issue              │        File        │                           Fix                           │
+  ├─────────────────────────────────┼────────────────────┼─────────────────────────────────────────────────────────┤
+  │ Welcome message in loaded chats │ OrbitAssistant.tsx │ Only show welcome when labeebMessages.length === 0      │
+  ├─────────────────────────────────┼────────────────────┼─────────────────────────────────────────────────────────┤
+  │ Markdown not rendering          │ OrbitAssistant.tsx │ Install react-markdown, wrap content in <ReactMarkdown> │
+  ├─────────────────────────────────┼────────────────────┼─────────────────────────────────────────────────────────┤
+  │ Streaming markdown              │ OrbitAssistant.tsx │ Also wrap streaming content in <ReactMarkdown>          │
+  └─────────────────────────────────┴────────────────────┴─────────────────────────────────────────────────────────┘
+  ---
+  Note on Missing User Messages
+
+  Some older chats may be missing user messages due to a bug in earlier persistence code. This has been fixed - newer chats properly save both user and assistant messages. The old chats are legacy data.

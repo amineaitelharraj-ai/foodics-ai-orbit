@@ -1,0 +1,119 @@
+================================================================================
+CONNECT FEEDBACK BUTTONS TO BACKEND API
+================================================================================
+Date: 2026-01-11
+Priority: HIGH - Backend API is ready, just needs frontend connection
+================================================================================
+
+ISSUE: Feedback buttons (thumbs up/down) log to console but don't call the API.
+
+Console shows:
+  "Feedback submitted: positive for message assistant-1768168061870"
+  "Feedback: positive for message assistant-1768168061870 in session session-..."
+
+But NO network request is made to /feedback endpoint.
+
+================================================================================
+
+BACKEND API (READY TO USE)
+--------------------------------------------------------------------------------
+
+Endpoint: POST /feedback
+URL: https://7n7va5ffib.execute-api.eu-west-1.amazonaws.com/dev/feedback
+Auth: Bearer token (same Cognito JWT used for other API calls)
+
+Request:
+{
+  "session_id": "string",      // The chat session ID
+  "message_id": "string",      // The message being rated
+  "rating": "positive" | "negative",
+  "comment": "string"          // Optional
+}
+
+Response:
+{
+  "success": true,
+  "feedback_id": "fb-abc123..."
+}
+
+================================================================================
+
+FIX REQUIRED
+--------------------------------------------------------------------------------
+
+Find where the feedback is being logged (search for "Feedback submitted" or
+"Feedback:" in the codebase) and add an API call.
+
+CURRENT CODE (approximately):
+
+const handleFeedback = (type: 'positive' | 'negative') => {
+  console.log(`Feedback submitted: ${type} for message ${messageId}`)
+  console.log(`Feedback: ${type} for message ${messageId} in session ${sessionId}`)
+  // UI updates to show "Thanks for your feedback!"
+}
+
+
+UPDATED CODE:
+
+const handleFeedback = async (type: 'positive' | 'negative') => {
+  try {
+    const response = await fetch(
+      `${import.meta.env.VITE_CHAT_API_URL}/feedback`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // Same token used for other calls
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          message_id: messageId,
+          rating: type,
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Failed to submit feedback')
+    }
+
+    const data = await response.json()
+    console.log('Feedback saved:', data.feedback_id)
+
+    // Update UI to show "Thanks for your feedback!"
+    setFeedbackSubmitted(true)
+
+  } catch (error) {
+    console.error('Error submitting feedback:', error)
+    // Still show success to user (non-critical feature)
+    setFeedbackSubmitted(true)
+  }
+}
+
+
+================================================================================
+
+ENVIRONMENT VARIABLE
+--------------------------------------------------------------------------------
+
+The VITE_CHAT_API_URL should already be set in .env:
+
+VITE_CHAT_API_URL=https://7n7va5ffib.execute-api.eu-west-1.amazonaws.com/dev
+
+If not, add it.
+
+================================================================================
+
+TESTING
+--------------------------------------------------------------------------------
+
+After making the change:
+
+1. Send a message to the AI
+2. Click thumbs up or thumbs down
+3. Check Network tab - should see POST to /feedback with 200 response
+4. Response should contain: {"success": true, "feedback_id": "fb-..."}
+
+================================================================================
+END OF INSTRUCTIONS
+================================================================================

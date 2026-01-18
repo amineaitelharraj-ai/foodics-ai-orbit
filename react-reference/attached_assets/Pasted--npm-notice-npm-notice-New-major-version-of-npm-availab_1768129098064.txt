@@ -1,0 +1,151 @@
+
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.7.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.7.0
+npm notice To update run: npm install -g npm@11.7.0
+npm notice
+
+2026-01-11T10:50:35Z info: Pushing pid1 binary layer...
+2026-01-11T10:50:40Z info: Pushing Repl layer...
+2026-01-11T10:50:40Z info: Pushing hosting layer...
+2026-01-11T10:50:41Z info: Created hosting layer
+2026-01-11T10:50:46Z info: Created pid1 binary layer
+2026-01-11T10:51:02Z info: Created Repl layer
+2026-01-11T10:51:10Z info: Pushed image manifest
+2026-01-11T10:51:14Z info: Pushed soci index manifest
+2026-01-11T10:51:18Z info: Creating Autoscale service
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+starting up user application
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+Node.js v20.19.3
+
+
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+file:///home/runner/workspace/server.js:1
+                ^
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+Node.js v20.19.3
+metasidecar: loaded enterprise status from environment is_enterprise=false
+
+file:///home/runner/workspace/server.js:1
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+const express = require('express');
+file:///home/runner/workspace/server.js:1
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+ReferenceError: require is not defined in ES module scope, you can use import instead
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+                ^
+command finished with error [node server.js]: exit status 1
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+file:///home/runner/workspace/server.js:1
+const express = require('express');
+    at file:///home/runner/workspace/server.js:1:17
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+forwarding local port 5000 to external port 80 (mapped as 1104)
+    at file:///home/runner/workspace/server.js:1:17
+command finished with error [node server.js]: exit status 1
+Node.js v20.19.3
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+
+ReferenceError: require is not defined in ES module scope, you can use import instead
+file:///home/runner/workspace/server.js:1
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+command finished with error [node server.js]: exit status 1
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+ReferenceError: require is not defined in ES module scope, you can use import instead
+
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+
+    at file:///home/runner/workspace/server.js:1:17
+const express = require('express');
+                ^
+
+
+                ^
+command finished with error [node server.js]: exit status 1
+    at file:///home/runner/workspace/server.js:1:17
+
+Node.js v20.19.3
+                ^
+                ^
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+                ^
+
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+const express = require('express');
+
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+file:///home/runner/workspace/server.js:1
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+Node.js v20.19.3
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at file:///home/runner/workspace/server.js:1:17
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+command finished with error [node server.js]: exit status 1
+
+command finished with error [node server.js]: exit status 1
+Node.js v20.19.3
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+Node.js v20.19.3
+    at file:///home/runner/workspace/server.js:1:17
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+const express = require('express');
+
+    at file:///home/runner/workspace/server.js:1:17
+ReferenceError: require is not defined in ES module scope, you can use import instead
+file:///home/runner/workspace/server.js:1
+const express = require('express');
+command finished with error [node server.js]: exit status 1
+const express = require('express');
+const express = require('express');
+
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+const express = require('express');
+                ^
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+Node.js v20.19.3
+Node.js v20.19.3
+file:///home/runner/workspace/server.js:1
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+                ^
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at file:///home/runner/workspace/server.js:1:17
+
+    at file:///home/runner/workspace/server.js:1:17
+file:///home/runner/workspace/server.js:1
+
+command finished with error [node server.js]: exit status 1
+
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+command finished with error [node server.js]: exit status 1
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+
+                ^
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+This file is being treated as an ES module because it has a '.js' file extension and '/home/runner/workspace/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///home/runner/workspace/server.js:1:17
+Node.js v20.19.3
+command finished with error [node server.js]: exit status 1
+file:///home/runner/workspace/server.js:1
+ReferenceError: require is not defined in ES module scope, you can use import instead
+    at async ModuleLoader.import (node:internal/modules/esm/loader:540:24)
+    at ModuleJob.run (node:internal/modules/esm/module_job:263:25)
+const express = require('express');
+
+crash loop detected
+2026-01-11T10:52:35Z error: The deployment is crash looping. This can happen if the run command fails or exits immediately after starting. Check the logs for more information.

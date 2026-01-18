@@ -1,0 +1,220 @@
+================================================================================
+REPLIT FRONTEND UPDATE: Improved Large Data Notice (Merged with Spinner)
+================================================================================
+
+CURRENT BEHAVIOR:
+- large_data_notice appears as a separate chat bubble
+- Fun spinner ("Preparing your Mandi underground style...") shows separately
+- Two loading indicators = redundant and cluttered
+
+NEW BEHAVIOR:
+- Merge large_data_notice INTO the spinner area
+- Keep the fun food messages
+- Add subtle data fetch info + BI tools link
+- Single cohesive loading experience
+
+================================================================================
+VISUAL DESIGN
+================================================================================
+
+BEFORE (current - two separate elements):
+┌─────────────────────────────────────────────────────────────────┐
+│ [Large Data Notice Card]                                        │
+│ 📊 Fetching your data... Feel free to explore our BI tools...  │
+│    Explore BI Tools →                                     [X]   │
+├─────────────────────────────────────────────────────────────────┤
+│ [Spinner Card]                                                  │
+│ 🥙 Preparing your answer                                        │
+│    "Preparing your Mandi underground style..."                  │
+└─────────────────────────────────────────────────────────────────┘
+
+AFTER (merged - single element):
+┌─────────────────────────────────────────────────────────────────┐
+│ 🥙 Preparing your answer                                        │
+│    "Preparing your Mandi underground style..."                  │
+│                                                                 │
+│    ────────────────────────────────────────                     │
+│    📊 Fetching large dataset...  Explore BI Tools →             │
+└─────────────────────────────────────────────────────────────────┘
+
+================================================================================
+IMPLEMENTATION
+================================================================================
+
+1. ADD STATE FOR LARGE DATA NOTICE
+--------------------------------
+
+```typescript
+// In your chat/message state
+const [isLargeDataFetch, setIsLargeDataFetch] = useState(false);
+```
+
+2. UPDATE WEBSOCKET HANDLER
+---------------------------
+
+```typescript
+case 'large_data_notice':
+  console.log('[WS] Large data fetch:', data.message);
+  // Set flag instead of showing separate notice
+  setIsLargeDataFetch(true);
+  break;
+
+case 'tool_end':
+  // Clear the large data flag when tool completes
+  setIsLargeDataFetch(false);
+  // ... existing tool_end handling
+  break;
+
+case 'complete':
+  // Also clear on complete
+  setIsLargeDataFetch(false);
+  // ... existing complete handling
+  break;
+```
+
+3. UPDATE SPINNER COMPONENT
+---------------------------
+
+```tsx
+// In your loading/spinner component (where "Preparing your Mandi..." shows)
+
+interface LoadingSpinnerProps {
+  message: string;           // Fun food message
+  isLargeDataFetch: boolean; // New prop
+}
+
+export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+  message,
+  isLargeDataFetch
+}) => {
+  return (
+    <div className="loading-spinner">
+      {/* Existing spinner content */}
+      <div className="spinner-icon">{getRandomFoodEmoji()}</div>
+      <div className="spinner-content">
+        <div className="spinner-title">Preparing your answer</div>
+        <p className="spinner-message">{message}</p>
+
+        {/* NEW: Large data fetch indicator */}
+        {isLargeDataFetch && (
+          <div className="large-data-indicator">
+            <span className="indicator-icon">📊</span>
+            <span className="indicator-text">Fetching large dataset...</span>
+            <a href="/ai-orbit/insights" className="indicator-link">
+              Explore BI Tools
+              <svg>...</svg>
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+```
+
+4. CSS STYLING
+--------------
+
+```css
+/* Add to your existing spinner styles */
+
+.large-data-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.large-data-indicator .indicator-icon {
+  font-size: 14px;
+}
+
+.large-data-indicator .indicator-text {
+  flex: 1;
+}
+
+.large-data-indicator .indicator-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #64B5F6;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.large-data-indicator .indicator-link:hover {
+  color: #90CAF9;
+}
+
+.large-data-indicator .indicator-link svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Optional: subtle animation for the indicator */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.large-data-indicator {
+  animation: fadeSlideIn 0.3s ease-out;
+}
+```
+
+================================================================================
+REMOVE OLD IMPLEMENTATION
+================================================================================
+
+Remove the separate LargeDataNotice component/card that currently appears
+as a chat bubble. The notice is now integrated into the spinner.
+
+Delete or comment out:
+- The `<LargeDataNotice>` component rendering
+- The separate state for `largeDataNotice` message string
+- Any separate styling for the notice card
+
+================================================================================
+BEHAVIOR SUMMARY
+================================================================================
+
+1. User sends "list all my products"
+2. Spinner appears: "🥙 Preparing your Mandi underground style..."
+3. Backend sends `large_data_notice`
+4. Spinner updates to show additional line:
+   "📊 Fetching large dataset... Explore BI Tools →"
+5. Backend sends `tool_end`
+6. Large data indicator disappears (spinner may continue for LLM response)
+7. Backend sends tokens/complete
+8. Spinner disappears, response shows
+
+================================================================================
+TESTING
+================================================================================
+
+Test queries that trigger large_data_notice:
+- "list all my products"
+- "search for products"
+- "show me all orders"
+- "list customers"
+
+Verify:
+- [ ] Spinner shows fun message as before
+- [ ] Large data indicator appears INSIDE spinner when notice received
+- [ ] Indicator shows "Fetching large dataset..." text
+- [ ] "Explore BI Tools" link works (goes to /ai-orbit/insights)
+- [ ] Indicator disappears when tool_end/complete received
+- [ ] No separate chat bubble for the notice
+
+================================================================================

@@ -1,0 +1,289 @@
+{
+  "info": {
+    "name": "Fraud Detection API - InventoryGuru",
+    "description": "Comprehensive API testing for the fraud detection backend system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "timestamp",
+      "value": "{{$isoTimestamp}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check if the fraud detection backend is healthy and connected to database"
+      },
+      "response": []
+    },
+    {
+      "name": "Get All Fraud Rules",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/fraud/rules",
+          "host": ["{{base_url}}"],
+          "path": ["api", "fraud", "rules"]
+        },
+        "description": "Retrieve all fraud detection rules (should return 6 default rules)"
+      },
+      "response": []
+    },
+    {
+      "name": "Submit Single Void Event",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Request-ID",
+            "value": "postman-test-{{$randomUUID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"postman-void-{{$randomInt}}\",\n  \"posId\": \"POS-001\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-postman\",\n  \"eventType\": \"void\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-void-{{$randomInt}}\",\n  \"orderTotal\": 25.99,\n  \"metadata\": {\n    \"voidReason\": \"customer_request\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/fraud/events",
+          "host": ["{{base_url}}"],
+          "path": ["api", "fraud", "events"]
+        },
+        "description": "Submit a single void event (should not trigger fraud rule)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test High Discount Rule",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Request-ID",
+            "value": "postman-discount-{{$randomUUID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"postman-discount-{{$randomInt}}\",\n  \"posId\": \"POS-002\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-discount\",\n  \"eventType\": \"discount_applied\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-discount-{{$randomInt}}\",\n  \"orderTotal\": 100.00,\n  \"discountAmount\": 40.00,\n  \"metadata\": {\n    \"discountType\": \"manual\",\n    \"discountPercent\": 40\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/fraud/events",
+          "host": ["{{base_url}}"],
+          "path": ["api", "fraud", "events"]
+        },
+        "description": "Submit a high discount event (40% discount - should trigger HIGH severity fraud flag)"
+      },
+      "response": []
+    },
+    {
+      "name": "Test Return Event",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Request-ID",
+            "value": "postman-return-{{$randomUUID}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"eventId\": \"postman-return-{{$randomInt}}\",\n  \"posId\": \"POS-003\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-returns\",\n  \"eventType\": \"return\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-return-{{$randomInt}}\",\n  \"orderTotal\": 50.00,\n  \"metadata\": {\n    \"returnReason\": \"defective\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/fraud/events",
+          "host": ["{{base_url}}"],
+          "path": ["api", "fraud", "events"]
+        },
+        "description": "Submit a return event (need 2 within 30 minutes to trigger fraud rule)"
+      },
+      "response": []
+    },
+    {
+      "name": "Get Fraud Flags",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/fraud/flags?limit=10&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["api", "fraud", "flags"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            }
+          ]
+        },
+        "description": "Retrieve fraud flags that have been generated by the fraud detection engine"
+      },
+      "response": []
+    },
+    {
+      "name": "Fraud Scenarios",
+      "item": [
+        {
+          "name": "Trigger Excessive Voids",
+          "item": [
+            {
+              "name": "Void 1 of 3",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"excessive-void-1\",\n  \"posId\": \"POS-001\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-suspicious\",\n  \"eventType\": \"void\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-void-1\",\n  \"orderTotal\": 15.99,\n  \"metadata\": {\n    \"voidReason\": \"error\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/fraud/events",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "fraud", "events"]
+                },
+                "description": "First void - should not trigger rule yet"
+              }
+            },
+            {
+              "name": "Void 2 of 3", 
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"excessive-void-2\",\n  \"posId\": \"POS-001\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-suspicious\",\n  \"eventType\": \"void\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-void-2\",\n  \"orderTotal\": 12.50,\n  \"metadata\": {\n    \"voidReason\": \"error\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/fraud/events",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "fraud", "events"]
+                },
+                "description": "Second void - still building to threshold"
+              }
+            },
+            {
+              "name": "Void 3 of 3 (TRIGGERS FRAUD FLAG)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"excessive-void-3\",\n  \"posId\": \"POS-001\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-suspicious\",\n  \"eventType\": \"void\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-void-3\",\n  \"orderTotal\": 8.75,\n  \"metadata\": {\n    \"voidReason\": \"error\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/fraud/events",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "fraud", "events"]
+                },
+                "description": "Third void - should trigger HIGH severity fraud flag!"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trigger Excessive Returns",
+          "item": [
+            {
+              "name": "Return 1 of 2",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"excessive-return-1\",\n  \"posId\": \"POS-003\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-returns\",\n  \"eventType\": \"return\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-return-1\",\n  \"orderTotal\": 45.00,\n  \"metadata\": {\n    \"returnReason\": \"defective\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/fraud/events",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "fraud", "events"]
+                },
+                "description": "First return - within 30 minute window"
+              }
+            },
+            {
+              "name": "Return 2 of 2 (TRIGGERS FRAUD FLAG)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventId\": \"excessive-return-2\",\n  \"posId\": \"POS-003\",\n  \"merchantId\": \"merchant-123\",\n  \"storeId\": \"store-456\",\n  \"cashierId\": \"cashier-returns\",\n  \"eventType\": \"return\",\n  \"timestamp\": \"{{timestamp}}\",\n  \"transactionId\": \"txn-return-2\",\n  \"orderTotal\": 32.50,\n  \"metadata\": {\n    \"returnReason\": \"changed_mind\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/fraud/events",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "fraud", "events"]
+                },
+                "description": "Second return - should trigger MEDIUM severity fraud flag!"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+} 

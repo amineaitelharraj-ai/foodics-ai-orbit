@@ -1,0 +1,529 @@
+================================================================================
+REPLIT FRONTEND INSTRUCTIONS - DYNAMIC DATA RENDERING
+================================================================================
+
+STATUS: Backend sends raw structured data with `display_type`. Frontend renders dynamically.
+
+
+================================================================================
+KEY CONCEPT
+================================================================================
+
+The LLM decides the best visualization for each response. It sets `display_type`
+to tell the frontend HOW to render the data. Frontend just reads this field
+and renders accordingly - no hardcoded logic per agent.
+
+
+================================================================================
+DISPLAY TYPES
+================================================================================
+
+| display_type  | When LLM uses it                  | Frontend renders as         |
+|---------------|-----------------------------------|-----------------------------|
+| table         | Lists of records                  | Data table with columns     |
+| bar_chart     | Comparing categories              | Vertical bar chart          |
+| line_chart    | Trends over time                  | Line chart with x/y axes    |
+| pie_chart     | Proportions/percentages           | Pie/donut chart             |
+| cards         | KPIs, single values, summaries    | Metric cards with values    |
+| text          | Simple confirmations              | Plain text message          |
+
+
+================================================================================
+RESPONSE STRUCTURE
+================================================================================
+
+All responses have this structure:
+
+{
+  "type": "LIST" | "CREATE" | "UPDATE" | "DELETE" | "REPORT",
+  "agent": "menu" | "analytics",
+  "ok": true | false,
+  "summary": "Short summary text",
+  "result": [
+    {
+      "display_type": "table" | "bar_chart" | "line_chart" | "pie_chart" | "cards" | "text",
+      "data": [...],           // Array of objects - the actual data
+      "chart_config": {...},   // Chart settings (when display_type is a chart)
+      "pagination": {...},     // Page info (for tables)
+      "note": "...",           // Short status message
+      "context": "..."         // Error guidance (only when ok=false)
+    }
+  ]
+}
+
+
+================================================================================
+RENDERING LOGIC - COPY THIS
+================================================================================
+
+function renderResponse(response) {
+  // 1. Parse JSON if string
+  const data = typeof response === 'string' ? JSON.parse(response) : response;
+
+  // 2. Check if structured response
+  if (!data.result || !data.result[0]) {
+    return renderMarkdown(response);
+  }
+
+  const result = data.result[0];
+
+  // 3. Handle error state
+  if (!data.ok || !result.ok) {
+    return renderError({
+      message: result.context || data.summary,
+      options: result.data  // Available options for user to select
+    });
+  }
+
+  // 4. Render based on display_type
+  switch (result.display_type) {
+    case 'table':
+      return renderTable({
+        title: result.note,
+        columns: inferColumns(result.data),
+        rows: result.data,
+        pagination: result.pagination
+      });
+
+    case 'line_chart':
+      return renderLineChart({
+        title: result.chart_config?.title,
+        data: result.data,
+        xAxis: result.chart_config?.x_axis,
+        yAxis: result.chart_config?.y_axis
+      });
+
+    case 'bar_chart':
+      return renderBarChart({
+        title: result.chart_config?.title,
+        data: result.data,
+        xAxis: result.chart_config?.x_axis,
+        yAxis: result.chart_config?.y_axis
+      });
+
+    case 'pie_chart':
+      return renderPieChart({
+        title: result.chart_config?.title,
+        data: result.data,
+        labelKey: result.chart_config?.label_key,
+        valueKey: result.chart_config?.value_key
+      });
+
+    case 'cards':
+      return renderCards({
+        title: result.note,
+        metrics: result.data  // [{metric, value, change, period}, ...]
+      });
+
+    case 'text':
+    default:
+      return renderText(result.note || data.summary);
+  }
+}
+
+
+================================================================================
+COLUMN INFERENCE (for tables)
+================================================================================
+
+function inferColumns(data) {
+  if (!data || data.length === 0) return [];
+
+  const firstItem = data[0];
+  const columns = [];
+
+  // Preferred column order
+  const preferred = ['name', 'sku', 'price', 'status', 'reference',
+                     'total_spent', 'total_orders', 'revenue', 'date'];
+
+  // Add preferred columns first
+  preferred.forEach(key => {
+    if (key in firstItem) {
+      columns.push({
+        key,
+        label: formatLabel(key),
+        type: inferType(firstItem[key])
+      });
+    }
+  });
+
+  // Add remaining columns (except hidden ones)
+  const hidden = ['id', 'name_localized'];
+  Object.keys(firstItem).forEach(key => {
+    if (!preferred.includes(key) && !hidden.includes(key)) {
+      columns.push({
+        key,
+        label: formatLabel(key),
+        type: inferType(firstItem[key])
+      });
+    }
+  });
+
+  return columns;
+}
+
+function formatLabel(key) {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function inferType(value) {
+  if (typeof value === 'number') return value % 1 === 0 ? 'integer' : 'currency';
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'date';
+  return 'text';
+}
+
+
+================================================================================
+EXAMPLE RESPONSES
+================================================================================
+
+TABLE (list categories):
+{
+  "display_type": "table",
+  "data": [
+    {"name": "Burgers", "reference": "cat-1", "status": "active"},
+    {"name": "Salads", "reference": "cat-2", "status": "deleted"}
+  ],
+  "pagination": {"page": 1, "total": 100, "total_pages": 2}
+}
+
+LINE CHART (sales trend):
+{
+  "display_type": "line_chart",
+  "data": [
+    {"date": "2025-01-05", "revenue": 38200},
+    {"date": "2025-01-06", "revenue": 41500}
+  ],
+  "chart_config": {"title": "7-Day Sales", "x_axis": "date", "y_axis": "revenue"}
+}
+
+BAR CHART (sales by branch):
+{
+  "display_type": "bar_chart",
+  "data": [
+    {"branch": "Downtown", "revenue": 125000},
+    {"branch": "Mall", "revenue": 98000}
+  ],
+  "chart_config": {"title": "Sales by Branch", "x_axis": "branch", "y_axis": "revenue"}
+}
+
+CARDS (KPIs):
+{
+  "display_type": "cards",
+  "data": [
+    {"metric": "Revenue", "value": 45670, "change": -12.6},
+    {"metric": "Orders", "value": 1320, "change": -8.2}
+  ]
+}
+
+TEXT (confirmation):
+{
+  "display_type": "text",
+  "note": "Product deleted successfully"
+}
+
+
+================================================================================
+TESTING CHECKLIST
+================================================================================
+
+[x] Backend sends structured JSON with display_type
+[ ] Frontend parses JSON response
+[ ] Frontend switches on display_type field
+[ ] Tables render with column inference
+[ ] Line charts render for trends
+[ ] Bar charts render for comparisons
+[ ] Cards render for KPIs
+[ ] Error state shows context message
+[ ] Pagination works for tables
+
+
+================================================================================
+F&B-THEMED WAITING MESSAGES
+================================================================================
+
+When the AI is processing a request, show fun food & beverage themed messages
+instead of generic "thinking..." messages. This makes the wait feel shorter
+and more engaging for restaurant users.
+
+MESSAGE CATEGORIES:
+
+1. GENERAL PROCESSING (rotate randomly):
+   - "Simmering your request..."
+   - "Whisking up an answer..."
+   - "Marinating the data..."
+   - "Seasoning your insights..."
+   - "Letting the flavors develop..."
+   - "Sautéing the numbers..."
+   - "Prepping your ingredients..."
+   - "Plating your response..."
+   - "Adding the finishing garnish..."
+   - "Taste-testing the results..."
+
+2. FOR MENU QUERIES:
+   - "Browsing the pantry..."
+   - "Checking the recipe book..."
+   - "Reviewing the specials board..."
+   - "Scanning the inventory..."
+
+3. FOR ANALYTICS QUERIES:
+   - "Crunching the numbers like croutons..."
+   - "Slicing the data..."
+   - "Blending the metrics..."
+   - "Reducing the reports..."
+
+4. FOR MARKET RESEARCH:
+   - "Scouting the competition..."
+   - "Tasting the market trends..."
+   - "Sampling industry insights..."
+
+IMPLEMENTATION:
+
+const waitingMessages = {
+  general: [
+    "Simmering your request...",
+    "Whisking up an answer...",
+    "Marinating the data...",
+    "Seasoning your insights...",
+    "Letting the flavors develop...",
+    "Sautéing the numbers...",
+    "Prepping your ingredients...",
+    "Plating your response...",
+    "Adding the finishing garnish...",
+    "Taste-testing the results..."
+  ],
+  menu: [
+    "Browsing the pantry...",
+    "Checking the recipe book...",
+    "Reviewing the specials board...",
+    "Scanning the inventory..."
+  ],
+  analytics: [
+    "Crunching the numbers like croutons...",
+    "Slicing the data...",
+    "Blending the metrics...",
+    "Reducing the reports..."
+  ],
+  research: [
+    "Scouting the competition...",
+    "Tasting the market trends...",
+    "Sampling industry insights..."
+  ]
+};
+
+function getRandomMessage(category = 'general') {
+  const messages = waitingMessages[category] || waitingMessages.general;
+  return messages[Math.floor(Math.random() * messages.length)];
+}
+
+// Usage: Show message while waiting for response
+// Optional: Rotate through messages every 2-3 seconds during long waits
+let messageInterval;
+function startWaitingAnimation(category) {
+  showMessage(getRandomMessage(category));
+  messageInterval = setInterval(() => {
+    showMessage(getRandomMessage(category));
+  }, 2500);
+}
+
+function stopWaitingAnimation() {
+  clearInterval(messageInterval);
+}
+
+
+================================================================================
+CHAT SUGGESTION QUESTIONS (NEW CHAT)
+================================================================================
+
+When a new chat starts (no messages yet), show suggestion chips/buttons above
+the input field to help users get started quickly. These disappear after the
+first message is sent.
+
+SUGGESTION QUESTIONS:
+
+const suggestionQuestions = [
+  // Menu queries (most common)
+  {
+    label: "📋 List my products",
+    query: "List my products",
+    category: "menu"
+  },
+  {
+    label: "📁 Show categories",
+    query: "Show me all my categories",
+    category: "menu"
+  },
+  {
+    label: "🏪 View branches",
+    query: "What branches do I have?",
+    category: "menu"
+  },
+
+  // Analytics queries
+  {
+    label: "📊 Top customers",
+    query: "Who are my top 5 customers by spending?",
+    category: "analytics"
+  },
+  {
+    label: "📈 Sales this week",
+    query: "Show me my sales trend for the last 7 days",
+    category: "analytics"
+  },
+  {
+    label: "🛒 Recent orders",
+    query: "Show me my recent orders",
+    category: "analytics"
+  },
+
+  // Market research
+  {
+    label: "🔍 Market trends",
+    query: "What are the current F&B market trends?",
+    category: "research"
+  }
+];
+
+IMPLEMENTATION:
+
+function SuggestionChips({ onSelect, visible }) {
+  if (!visible) return null;
+
+  return (
+    <div className="suggestion-chips">
+      <p className="suggestion-label">Try asking:</p>
+      <div className="chips-container">
+        {suggestionQuestions.map((suggestion, index) => (
+          <button
+            key={index}
+            className="suggestion-chip"
+            onClick={() => onSelect(suggestion.query)}
+          >
+            {suggestion.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Usage in chat component:
+const [messages, setMessages] = useState([]);
+const showSuggestions = messages.length === 0;
+
+// When suggestion clicked:
+const handleSuggestionClick = (query) => {
+  sendMessage(query);
+};
+
+STYLING (CSS):
+
+.suggestion-chips {
+  padding: 16px;
+  text-align: center;
+}
+
+.suggestion-label {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.suggestion-chip {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.suggestion-chip:hover {
+  background: #e0e0e0;
+  border-color: #ccc;
+}
+
+
+================================================================================
+COMBINED EXAMPLE
+================================================================================
+
+// Full chat component with both features
+function Chat() {
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+
+  const showSuggestions = messages.length === 0 && !isLoading;
+
+  // Detect category from user input for themed messages
+  const detectCategory = (text) => {
+    const lower = text.toLowerCase();
+    if (lower.includes('product') || lower.includes('category') ||
+        lower.includes('branch') || lower.includes('modifier')) {
+      return 'menu';
+    }
+    if (lower.includes('customer') || lower.includes('sales') ||
+        lower.includes('order') || lower.includes('revenue')) {
+      return 'analytics';
+    }
+    if (lower.includes('market') || lower.includes('trend') ||
+        lower.includes('competitor')) {
+      return 'research';
+    }
+    return 'general';
+  };
+
+  const sendMessage = async (text) => {
+    setIsLoading(true);
+    const category = detectCategory(text);
+
+    // Start rotating waiting messages
+    const updateMessage = () => {
+      setLoadingMessage(getRandomMessage(category));
+    };
+    updateMessage();
+    const interval = setInterval(updateMessage, 2500);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: text })
+      });
+      // Handle response...
+    } finally {
+      clearInterval(interval);
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="chat">
+      <MessageList messages={messages} />
+
+      {isLoading && (
+        <div className="loading-indicator">
+          <span className="loading-message">{loadingMessage}</span>
+        </div>
+      )}
+
+      <SuggestionChips
+        visible={showSuggestions}
+        onSelect={sendMessage}
+      />
+
+      <ChatInput onSubmit={sendMessage} disabled={isLoading} />
+    </div>
+  );
+}
+
+
+================================================================================

@@ -1,0 +1,120 @@
+================================================================================
+REPLIT FIX: Raw JSON Displayed During Streaming
+================================================================================
+
+Date: 2026-01-18
+Priority: High
+
+ISSUE:
+------
+Sometimes the chat displays raw JSON like:
+  {"entity": "product", "task": "Create new product...
+
+Instead of the formatted/parsed response.
+
+ROOT CAUSE:
+-----------
+In OrbitAssistant.tsx, streaming content is rendered with ReactMarkdown
+WITHOUT checking if it's structured JSON first. The isStructuredResponse()
+check only happens for completed messages, not streaming content.
+
+Current code (around line 1669-1681):
+
+```typescript
+{streamingContent && (
+  <div className="flex justify-start">
+    <div className="max-w-3xl px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700">
+      <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+        <ReactMarkdown>{streamingContent}</ReactMarkdown>  // <-- PROBLEM: No JSON check
+      </div>
+      <div className="flex items-center mt-2 text-xs text-gray-500">
+        <span className="inline-block w-2 h-2 bg-primary-500 rounded-full animate-pulse mr-2"></span>
+        Streaming...
+      </div>
+    </div>
+  </div>
+)}
+```
+
+FIX:
+----
+Update the streaming content section in OrbitAssistant.tsx to check for
+structured JSON before rendering:
+
+```typescript
+{streamingContent && (
+  <div className="flex justify-start">
+    <div className="max-w-3xl px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+      <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+        {isStructuredResponse(streamingContent) ? (
+          <StructuredResponse content={streamingContent} />
+        ) : (
+          <ReactMarkdown>{streamingContent}</ReactMarkdown>
+        )}
+      </div>
+      <div className="flex items-center mt-2 text-xs text-gray-500">
+        <span className="inline-block w-2 h-2 bg-primary-500 rounded-full animate-pulse mr-2"></span>
+        Streaming...
+      </div>
+    </div>
+  </div>
+)}
+```
+
+WHAT THIS DOES:
+---------------
+1. Checks if streamingContent is structured JSON using isStructuredResponse()
+2. If JSON: renders with StructuredResponse component (tables, charts, etc.)
+3. If not JSON: renders with ReactMarkdown (normal text)
+
+IMPORTS TO VERIFY:
+------------------
+Make sure these imports exist at the top of OrbitAssistant.tsx:
+
+```typescript
+import { isStructuredResponse } from '../utils/message-utils';
+import { StructuredResponse } from '../components/StructuredResponse';
+```
+
+ALTERNATIVE FIX (if StructuredResponse causes issues during streaming):
+-----------------------------------------------------------------------
+If rendering StructuredResponse during streaming causes flickering or
+performance issues, you can hide JSON content until complete:
+
+```typescript
+{streamingContent && (
+  <div className="flex justify-start">
+    <div className="max-w-3xl px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white">
+      <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+        {isStructuredResponse(streamingContent) ? (
+          // Show loading indicator for JSON responses instead of raw JSON
+          <div className="flex items-center gap-2">
+            <span className="animate-pulse">Processing response...</span>
+          </div>
+        ) : (
+          <ReactMarkdown>{streamingContent}</ReactMarkdown>
+        )}
+      </div>
+      <div className="flex items-center mt-2 text-xs text-gray-500">
+        <span className="inline-block w-2 h-2 bg-primary-500 rounded-full animate-pulse mr-2"></span>
+        Streaming...
+      </div>
+    </div>
+  </div>
+)}
+```
+
+This hides the raw JSON during streaming and shows "Processing response..."
+until the complete message arrives and StructuredResponse renders properly.
+
+TEST AFTER FIX:
+---------------
+1. Send: "list my products"
+2. During streaming: should NOT show raw JSON
+3. After complete: should show formatted table
+
+4. Send: "what's the weather?" (text response)
+5. During streaming: should show text normally
+6. After complete: should show text
+
+================================================================================

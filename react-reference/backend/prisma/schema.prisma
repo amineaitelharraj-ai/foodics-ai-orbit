@@ -1,0 +1,275 @@
+// Simplified Fraud Detection Schema for SQLite Testing
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Simplified POS Event model
+model POSEvent {
+  id            String   @id @default(cuid())
+  eventId       String   @unique
+  posId         String
+  posDeviceId   String   // Added missing field
+  branchId      String   // Added missing field
+  merchantId    String
+  storeId       String
+  cashierId     String
+  eventType     String   // "void", "return", "discount_applied", etc.
+  timestamp     DateTime
+  transactionId String
+  orderTotal    Float    @default(0)
+  discountAmount Float?
+  itemId        String?
+  reason        String?
+  
+  // Simplified metadata as text (JSON string)
+  metadataJson  String?  @default("{}")
+  
+  // Processing status
+  processed     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  fraudFlags    FraudFlag[]
+  
+  @@map("pos_events")
+}
+
+// Simplified Fraud Rule model
+model FraudRule {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  version     String   @default("1.0") // Added missing field
+  description String
+  ruleFamily  String   // "VOIDS_RETURNS", "DISCOUNTS", etc.
+  severity    String   // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  enabled     Boolean  @default(true)
+  
+  // Simplified threshold as text (JSON string)
+  threshold     String?  // Added missing field for backward compatibility
+  thresholdJson String  // {"type": "count", "value": 3, "operator": ">="}
+  timeWindowJson String? // {"duration": 3600, "unit": "seconds"}
+  conditionsJson String  // JSON array of conditions
+  actionsJson   String   // JSON array of actions
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  fraudFlags  FraudFlag[]
+  ruleMetrics RuleMetric[] // Added missing relation
+  
+  @@map("fraud_rules")
+}
+
+// Simplified Fraud Flag model
+model FraudFlag {
+  id          String   @id @default(cuid())
+  ruleId      String
+  ruleName    String
+  eventId     String
+  posId       String
+  cashierId   String
+  merchantId  String
+  storeId     String
+  severity    String   // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  status      String   @default("PENDING") // "PENDING", "INVESTIGATING", "RESOLVED", etc.
+  description String
+  
+  // Evidence as JSON string
+  evidenceJson String
+  
+  // Investigation
+  investigatedAt     DateTime?
+  investigatedBy     String?
+  investigationNotes String?
+  resolution         String?
+  
+  // Risk assessment
+  riskScore          Int      @default(0) // 0-100
+  
+  // Added missing field
+  flaggedAt   DateTime @default(now())
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  rule      FraudRule @relation(fields: [ruleId], references: [id])
+  event     POSEvent  @relation(fields: [eventId], references: [id])
+  branch    Branch?   @relation(fields: [storeId], references: [id]) // Added missing relation
+  
+  @@map("fraud_flags")
+}
+
+// Simplified Branch model
+model Branch {
+  id          String   @id @default(cuid())
+  name        String
+  timezone    String   @default("UTC")
+  
+  // Operating hours as JSON string
+  operatingHoursJson String // {"open": 9, "close": 22}
+  
+  // Location
+  address     String?
+  phone       String?
+  email       String?
+  
+  // Business metrics
+  averageTransactionValue Float?
+  peakTransactionHours    String? // JSON array
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  fraudFlags    FraudFlag[] // Added missing relation
+  fraudMetrics  FraudMetric[] // Added missing relation
+  
+  @@map("branches")
+}
+
+// Simplified Employee model
+model Employee {
+  id          String   @id @default(cuid())
+  employeeId  String   @unique
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  
+  // Employment details
+  hireDate    DateTime
+  status      String   @default("ACTIVE") // "ACTIVE", "INACTIVE", "SUSPENDED"
+  role        String
+  
+  // Branch association
+  branchId    String?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("employees")
+}
+
+// Simplified User model for admin access
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String
+  lastName    String
+  role        String   @default("VIEWER") // "ADMIN", "MANAGER", "INVESTIGATOR", etc.
+  
+  // Authentication
+  passwordHash String?
+  active      Boolean  @default(true)
+  lastLogin   DateTime?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("users")
+}
+
+// Daily fraud metrics
+model FraudMetric {
+  id              String   @id @default(cuid())
+  date            DateTime
+  merchantId      String
+  storeId         String
+  
+  // Event counts
+  totalEvents       Int      @default(0)
+  totalTransactions Int      @default(0) // Added missing field
+  flaggedEvents     Int      @default(0)
+  flaggedTransactions Int    @default(0) // Added missing field
+  falsePositives    Int      @default(0)
+  confirmedFraud    Int      @default(0)
+  
+  // Financial metrics
+  potentialLossPrevented Float @default(0)
+  actualLossAmount       Float @default(0)
+  
+  // Performance metrics
+  averageProcessingTime    Float @default(0) // milliseconds
+  averageProcessingTimeMs  Float @default(0) // Added alias field
+  
+  // Rule performance as JSON string
+  ruleAccuracyJson       String @default("{}")
+  ruleExecutionCountJson String @default("{}")
+  
+  // Relations
+  branch  Branch? @relation(fields: [storeId], references: [id])
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([date, merchantId, storeId])
+  @@map("fraud_metrics")
+}
+
+// Rule performance metrics
+model RuleMetric {
+  id              String   @id @default(cuid())
+  ruleId          String
+  date            DateTime
+  
+  // Execution metrics
+  executionCount  Int      @default(0)
+  truePositives   Int      @default(0)
+  falsePositives  Int      @default(0)
+  accuracy        Float    @default(0)
+  
+  // Relations
+  rule            FraudRule @relation(fields: [ruleId], references: [id])
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([ruleId, date])
+  @@map("rule_metrics")
+}
+
+// Audit log for tracking changes
+model AuditLog {
+  id          String   @id @default(cuid())
+  entityType  String   // "FraudRule", "FraudFlag", etc.
+  entityId    String
+  action      String   // "CREATE", "UPDATE", "DELETE"
+  userId      String?
+  changes     String   // JSON of changes
+  newValues   String?  // Added missing field for create actions
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+// System configuration
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  valueJson   String   // JSON value
+  description String?
+  category    String
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("system_config")
+} 
