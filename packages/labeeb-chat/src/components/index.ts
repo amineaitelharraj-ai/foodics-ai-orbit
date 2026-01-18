@@ -6,6 +6,9 @@ export { default as QueryClarification } from './QueryClarification.vue';
 export { default as StructuredResponse } from './StructuredResponse.vue';
 export { default as MessageList } from './MessageList.vue';
 
+// HITL Components
+export * from './hitl';
+
 // Re-export types from StructuredResponse
 export type {
   Pagination,
