@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { Send, Mic, Paperclip, Wifi, WifiOff } from 'lucide-vue-next'
-import { FdxButton, FdxChip, FdxAlert } from '@foodics/ui-common'
+import { Send, Mic, Paperclip, Wifi, WifiOff, X, AlertCircle } from 'lucide-vue-next'
+import { FdxButton, FdxChip } from '@foodics/ui-common'
 
 interface Suggestion {
   label: string
@@ -91,14 +91,23 @@ function handleClearError() {
     </div>
 
     <!-- Error Message -->
-    <FdxAlert v-if="error" variant="error" class="mb-3" closable @close="handleClearError">
-      {{ error }}
-    </FdxAlert>
+    <div v-if="error" class="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+      <div class="flex items-center gap-2 text-red-700">
+        <AlertCircle class="w-4 h-4" />
+        <span class="text-sm">{{ error }}</span>
+      </div>
+      <button class="text-red-500 hover:text-red-700" @click="handleClearError">
+        <X class="w-4 h-4" />
+      </button>
+    </div>
 
     <!-- Pending Approval Notice -->
-    <FdxAlert v-if="hasPendingApproval" variant="warning" class="mb-3">
-      Please approve or reject the pending action before sending new messages.
-    </FdxAlert>
+    <div v-if="hasPendingApproval" class="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+      <div class="flex items-center gap-2 text-amber-700">
+        <AlertCircle class="w-4 h-4" />
+        <span class="text-sm">Please approve or reject the pending action before sending new messages.</span>
+      </div>
+    </div>
 
     <!-- Suggestion Chips -->
     <div v-if="showSuggestions && !hasPendingApproval && suggestions.length > 0" class="mb-4">
@@ -107,9 +116,7 @@ function handleClearError() {
         <FdxChip
           v-for="(suggestion, index) in suggestions"
           :key="index"
-          variant="outline"
           size="sm"
-          clickable
           @click="handleSuggestionClick(suggestion.query)"
         >
           {{ suggestion.label }}

@@ -8,8 +8,9 @@ import {
   ChevronRight,
   Calendar,
   MoreVertical,
+  Search,
 } from 'lucide-vue-next';
-import { FdxButton, FdxInputText, FdxCard } from '@foodics/ui-common';
+import { FdxButton } from '@foodics/ui-common';
 import type { Session } from '@shared/api/session-storage';
 
 interface Props {
@@ -150,11 +151,15 @@ function handleToggleCollapse(): void {
 
     <!-- Search -->
     <div v-if="!isCollapsed" class="px-3 pb-3">
-      <FdxInputText
-        v-model="searchQuery"
-        placeholder="Search conversations..."
-        size="sm"
-      />
+      <div class="relative">
+        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search conversations..."
+          class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      </div>
     </div>
 
     <!-- Sessions List -->

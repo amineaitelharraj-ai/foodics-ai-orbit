@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { Zap } from 'lucide-vue-next';
+import { Zap, AlertCircle } from 'lucide-vue-next';
 import { useAuthStore } from '../stores/auth';
 import {
   FdxButton,
   FdxInputText,
   FdxInputPassword,
   FdxCard,
-  FdxAlert,
 } from '@foodics/ui-common';
 
 const router = useRouter();
@@ -60,13 +59,15 @@ async function handleSubmit() {
       <FdxCard class="p-8">
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <!-- Error Message -->
-          <FdxAlert v-if="error" variant="error">
-            {{ error }}
-          </FdxAlert>
+          <div v-if="error" class="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+            <AlertCircle class="w-4 h-4 flex-shrink-0" />
+            <span class="text-sm">{{ error }}</span>
+          </div>
 
           <!-- Email Input -->
           <FdxInputText
             v-model="email"
+            name="email"
             label="Email Address"
             type="email"
             placeholder="you@example.com"
@@ -77,6 +78,7 @@ async function handleSubmit() {
           <!-- Password Input -->
           <FdxInputPassword
             v-model="password"
+            name="password"
             label="Password"
             placeholder="Enter your password"
             autocomplete="current-password"

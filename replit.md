@@ -31,6 +31,17 @@ pnpm dev
 ```
 This starts the Vite dev server on port 5000.
 
+## Building for Production
+```bash
+pnpm build
+```
+Output is generated in `apps/orbit/dist` as a static SPA.
+
+## Deployment
+Configured for static deployment on Replit:
+- Build command: `pnpm build`
+- Public directory: `apps/orbit/dist`
+
 ## Recent Changes
 - 2026-01-19: Integrated @foodics/ui-common component library:
   - Added Foodics Tailwind preset and global CSS
