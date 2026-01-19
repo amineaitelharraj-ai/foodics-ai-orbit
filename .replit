@@ -47,3 +47,6 @@ publicDir = "apps/orbit/dist"
 [userenv.shared]
 VITE_COGNITO_USER_POOL_ID = "eu-west-1_4KVGPeV6s"
 VITE_COGNITO_CLIENT_ID = "71a7nhh8g9sftcfogv9ul35nhu"
+VITE_LABEEB_API_URL = "wss://labeeb.foodics.com"
+VITE_COGNITO_REGION = "eu-west-1"
+VITE_CHAT_API_URL = "https://7n7va5ffib.execute-api.eu-west-1.amazonaws.com/dev"
