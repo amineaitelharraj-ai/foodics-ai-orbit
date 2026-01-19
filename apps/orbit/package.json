@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@foodics/labeeb-chat": "workspace:*",
+    "@foodics/ui-common": "^1.16.0",
     "@types/markdown-it": "^14.1.2",
     "echarts": "^5.6.0",
     "highlight.js": "^11.11.1",
