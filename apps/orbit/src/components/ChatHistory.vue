@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
+  Search,
   Calendar,
 } from 'lucide-vue-next';
 
@@ -36,6 +37,7 @@ const emit = defineEmits<{
 }>();
 
 const INITIAL_CHATS_PER_DAY = 3;
+const searchQuery = ref('');
 
 // Track visible count per date group
 const visibleCounts = ref<Record<string, number>>({});
@@ -64,10 +66,16 @@ function formatDate(date: Date | string): string {
   }
 }
 
+const filteredSessions = computed(() => {
+  if (!searchQuery.value.trim()) return props.sessions;
+  const query = searchQuery.value.toLowerCase();
+  return props.sessions.filter((s) => s.title.toLowerCase().includes(query));
+});
+
 const groupedSessions = computed(() => {
   const groups: Record<string, Session[]> = {};
 
-  props.sessions.forEach((session) => {
+  filteredSessions.value.forEach((session) => {
     const dateKey = formatDate(session.updatedAt);
     if (!groups[dateKey]) {
       groups[dateKey] = [];
@@ -166,6 +174,19 @@ function handleDeleteSession(e: Event, sessionId: string) {
         <Plus class="w-4 h-4" />
         New Chat
       </button>
+    </div>
+
+    <!-- Search -->
+    <div class="px-3 pb-3">
+      <div class="relative">
+        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search chats..."
+          class="w-full pl-9 pr-3 py-2 text-sm bg-gray-100 dark:bg-gray-800 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 dark:text-white placeholder-gray-500"
+        />
+      </div>
     </div>
 
     <!-- Session List -->
