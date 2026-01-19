@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install:*)",
+      "Bash(npm --version:*)",
+      "Bash(node --version:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm --filter @foodics/labeeb-chat build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(monorepo\\): create Vue 3 monorepo structure\n\n- Set up pnpm workspace with packages/labeeb-chat, apps/orbit, shared\n- Configure TypeScript 5.6 with strict mode\n- Add Vite 5 build configuration for library mode\n- Set up Tailwind CSS and PostCSS\n- Add ESLint and Prettier configurations\n- Create placeholder entry points\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(npx vue-tsc:*)",
+      "Bash(pnpm --filter @foodics/labeeb-chat lint:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(npx eslint:*)",
+      "Bash(pnpm --filter @foodics/labeeb-chat exec vue-tsc:*)",
+      "Bash(pnpm --filter @foodics/orbit build:*)",
+      "Bash(pnpm --filter @foodics/labeeb-chat build:widget:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm --filter @foodics/orbit lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

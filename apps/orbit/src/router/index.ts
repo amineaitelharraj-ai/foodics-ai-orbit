@@ -37,6 +37,46 @@ const routes: RouteRecordRaw[] = [
         name: 'Help',
         component: () => import('../pages/Help.vue'),
       },
+      {
+        path: 'call-flow',
+        name: 'CallFlow',
+        component: () => import('../pages/CallFlow.vue'),
+      },
+      {
+        path: 'say-and-serve',
+        name: 'SayAndServe',
+        component: () => import('../pages/SayAndServe.vue'),
+      },
+      {
+        path: 'inventory-guru',
+        name: 'InventoryGuru',
+        component: () => import('../pages/InventoryGuru.vue'),
+      },
+      {
+        path: 'plat-studio',
+        name: 'PlatStudio',
+        component: () => import('../pages/PlatStudio.vue'),
+      },
+      {
+        path: 'foodics-demo',
+        name: 'FoodicsDemo',
+        component: () => import('../pages/FoodicsDemo.vue'),
+      },
+      {
+        path: 'inventory-count',
+        name: 'InventoryCount',
+        component: () => import('../pages/InventoryCount.vue'),
+      },
+      {
+        path: 'item-details',
+        name: 'ItemDetails',
+        component: () => import('../pages/ItemDetails.vue'),
+      },
+      {
+        path: 'purchase-order',
+        name: 'PurchaseOrder',
+        component: () => import('../pages/PurchaseOrder.vue'),
+      },
     ],
   },
   {
