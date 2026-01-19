@@ -63,15 +63,15 @@ const groupedSessions = computed(() => {
     const sessionDate = new Date(session.updatedAt || session.createdAt);
 
     if (sessionDate >= today) {
-      groups['Today'].push(session);
+      groups['Today']!.push(session);
     } else if (sessionDate >= yesterday) {
-      groups['Yesterday'].push(session);
+      groups['Yesterday']!.push(session);
     } else if (sessionDate >= lastWeek) {
-      groups['This Week'].push(session);
+      groups['This Week']!.push(session);
     } else if (sessionDate >= lastMonth) {
-      groups['This Month'].push(session);
+      groups['This Month']!.push(session);
     } else {
-      groups['Older'].push(session);
+      groups['Older']!.push(session);
     }
   });
 

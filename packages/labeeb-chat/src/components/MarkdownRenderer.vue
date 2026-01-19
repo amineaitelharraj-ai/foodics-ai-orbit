@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { computed, ref } from 'vue';
 import MarkdownIt from 'markdown-it';
+import type Token from 'markdown-it/lib/token.mjs';
+import type { Options } from 'markdown-it';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/vs2015.css';
 
@@ -13,7 +15,6 @@ const props = withDefaults(defineProps<Props>(), {
   enableCopy: true,
 });
 
-const containerRef = ref<HTMLElement | null>(null);
 const copiedBlockId = ref<string | null>(null);
 
 const md = new MarkdownIt({
@@ -39,8 +40,9 @@ const md = new MarkdownIt({
 
 let blockCounter = 0;
 
-md.renderer.rules.fence = (tokens, idx, options) => {
+md.renderer.rules.fence = (tokens: Token[], idx: number, options: Options) => {
   const token = tokens[idx];
+  if (!token) return '';
   const code = token.content;
   const lang = token.info.trim() || 'text';
   const blockId = `code-block-${blockCounter++}`;
