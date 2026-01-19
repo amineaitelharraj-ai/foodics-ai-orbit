@@ -18,7 +18,8 @@ Orbit is a Vue 3 frontend application built with Vite. It's part of a pnpm monor
 ## Tech Stack
 - **Framework:** Vue 3
 - **Build Tool:** Vite
-- **Styling:** Tailwind CSS
+- **Styling:** Tailwind CSS with Foodics preset
+- **UI Components:** @foodics/ui-common (FdxButton, FdxCard, FdxChip, FdxAlert, FdxInputText, FdxInputPassword)
 - **State Management:** Pinia
 - **Routing:** Vue Router
 - **Package Manager:** pnpm (monorepo workspace)
@@ -31,6 +32,12 @@ pnpm dev
 This starts the Vite dev server on port 5000.
 
 ## Recent Changes
+- 2026-01-19: Integrated @foodics/ui-common component library:
+  - Added Foodics Tailwind preset and global CSS
+  - Login page: FdxButton, FdxInputText, FdxInputPassword, FdxCard, FdxAlert
+  - ChatInput: FdxButton, FdxChip, FdxAlert (native textarea for auto-resize)
+  - HITLCardWrapper: FdxCard, FdxButton, FdxChip
+  - ChatSidebar: FdxButton, FdxInputText
 - 2026-01-19: Implemented missing Labeeb chat features:
   - ChatSidebar component (session history with search, date grouping, session management)
   - MarkdownRenderer component (full GFM support, syntax highlighting, copy code buttons)
