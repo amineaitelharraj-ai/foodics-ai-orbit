@@ -5,6 +5,8 @@ export { default as StreamingIndicator } from './StreamingIndicator.vue';
 export { default as QueryClarification } from './QueryClarification.vue';
 export { default as StructuredResponse } from './StructuredResponse.vue';
 export { default as MessageList } from './MessageList.vue';
+export { default as ChatSidebar } from './ChatSidebar.vue';
+export { default as MarkdownRenderer } from './MarkdownRenderer.vue';
 
 // HITL Components
 export * from './hitl';

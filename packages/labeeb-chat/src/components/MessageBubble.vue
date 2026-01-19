@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Copy, Check, ThumbsUp, ThumbsDown, RefreshCw } from 'lucide-vue-next';
 import type { Message } from '../types';
+import MarkdownRenderer from './MarkdownRenderer.vue';
 
 // Props interface
 interface Props {
@@ -97,10 +98,10 @@ function handleRegenerate(): void {
 }
 
 /**
- * Simple markdown-like text processing
- * For full markdown support, consider using a library like markdown-it
+ * Simple markdown-like text processing for user messages only
+ * Assistant messages use full MarkdownRenderer component
  */
-function processContent(content: string): string {
+function processUserContent(content: string): string {
   if (!content) return '';
 
   // Escape HTML first
@@ -129,7 +130,7 @@ function processContent(content: string): string {
   return processed;
 }
 
-const renderedContent = computed(() => processContent(props.message.content));
+const userRenderedContent = computed(() => processUserContent(props.message.content));
 </script>
 
 <template>
@@ -144,10 +145,8 @@ const renderedContent = computed(() => processContent(props.message.content));
         :class="bubbleClasses"
       >
         <!-- Message content -->
-        <div
-          class="prose prose-sm dark:prose-invert max-w-none break-words"
-          v-html="renderedContent"
-        />
+        <div v-if="isUserMessage" class="prose prose-sm max-w-none break-words" v-html="userRenderedContent" />
+        <MarkdownRenderer v-else :content="message.content" :enable-copy="true" />
 
         <!-- Timestamp -->
         <div

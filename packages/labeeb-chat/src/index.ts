@@ -15,6 +15,8 @@ export {
   StreamingIndicator,
   QueryClarification,
   StructuredResponse,
+  ChatSidebar,
+  MarkdownRenderer,
 } from './components';
 
 // Re-export component types
@@ -31,6 +33,9 @@ export * from './composables';
 
 // Types
 export * from './types';
+
+// Services
+export * from './services/imageGeneration';
 
 // Version
 export const VERSION = '0.1.0';

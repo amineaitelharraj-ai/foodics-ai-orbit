@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
-import { Copy, Check } from 'lucide-vue-next';
+import 'highlight.js/styles/vs2015.css';
 
 interface Props {
   content: string;
@@ -13,7 +13,8 @@ const props = withDefaults(defineProps<Props>(), {
   enableCopy: true,
 });
 
-const copiedBlocks = ref<Set<number>>(new Set());
+const containerRef = ref<HTMLElement | null>(null);
+const copiedBlockId = ref<string | null>(null);
 
 const md = new MarkdownIt({
   html: false,
@@ -25,7 +26,7 @@ const md = new MarkdownIt({
       try {
         return hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
       } catch {
-        // Fall through to auto-detection
+        // Fall through
       }
     }
     try {
@@ -36,10 +37,13 @@ const md = new MarkdownIt({
   },
 });
 
-md.renderer.rules.fence = (tokens, idx, options, _env, self) => {
+let blockCounter = 0;
+
+md.renderer.rules.fence = (tokens, idx, options) => {
   const token = tokens[idx];
   const code = token.content;
   const lang = token.info.trim() || 'text';
+  const blockId = `code-block-${blockCounter++}`;
 
   let highlighted: string;
   if (options.highlight) {
@@ -48,78 +52,74 @@ md.renderer.rules.fence = (tokens, idx, options, _env, self) => {
     highlighted = md.utils.escapeHtml(code);
   }
 
-  return `<div class="code-block-wrapper" data-block-index="${idx}" data-code="${encodeURIComponent(code)}">
-    <div class="code-block-header">
-      <span class="code-lang">${lang}</span>
-      <button class="copy-btn" data-block-index="${idx}" title="Copy code">
+  const copyButton = props.enableCopy
+    ? `<button class="copy-btn" data-block-id="${blockId}" data-code="${encodeURIComponent(code)}" title="Copy code">
         <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
         </svg>
-        <svg class="check-icon hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="check-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-      </button>
+      </button>`
+    : '';
+
+  return `<div class="code-block-wrapper" data-block-id="${blockId}">
+    <div class="code-block-header">
+      <span class="code-lang">${lang}</span>
+      ${copyButton}
     </div>
     <pre class="hljs"><code class="language-${lang}">${highlighted}</code></pre>
   </div>`;
 };
 
-md.renderer.rules.table_open = () => {
-  return '<div class="table-wrapper"><table class="markdown-table">';
-};
-
-md.renderer.rules.table_close = () => {
-  return '</table></div>';
-};
+md.renderer.rules.table_open = () => '<div class="table-wrapper"><table class="markdown-table">';
+md.renderer.rules.table_close = () => '</table></div>';
 
 const renderedContent = computed(() => {
   if (!props.content) return '';
+  blockCounter = 0;
   return md.render(props.content);
 });
 
-async function handleCopyCode(code: string, blockIndex: number): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(code);
-    copiedBlocks.value.add(blockIndex);
-    setTimeout(() => {
-      copiedBlocks.value.delete(blockIndex);
-    }, 2000);
-  } catch (err) {
-    console.error('Failed to copy code:', err);
-  }
-}
-
-function handleClick(event: MouseEvent): void {
+async function handleCopyClick(event: MouseEvent): Promise<void> {
   const target = event.target as HTMLElement;
   const copyBtn = target.closest('.copy-btn') as HTMLElement;
 
-  if (copyBtn) {
-    const wrapper = copyBtn.closest('.code-block-wrapper') as HTMLElement;
-    if (wrapper) {
-      const code = decodeURIComponent(wrapper.dataset.code || '');
-      const blockIndex = parseInt(wrapper.dataset.blockIndex || '0', 10);
-      handleCopyCode(code, blockIndex);
+  if (!copyBtn) return;
 
-      const copyIcon = copyBtn.querySelector('.copy-icon');
-      const checkIcon = copyBtn.querySelector('.check-icon');
-      if (copyIcon && checkIcon) {
-        copyIcon.classList.add('hidden');
-        checkIcon.classList.remove('hidden');
-        setTimeout(() => {
-          copyIcon.classList.remove('hidden');
-          checkIcon.classList.add('hidden');
-        }, 2000);
-      }
+  const code = decodeURIComponent(copyBtn.dataset.code || '');
+  const blockId = copyBtn.dataset.blockId || '';
+
+  try {
+    await navigator.clipboard.writeText(code);
+    copiedBlockId.value = blockId;
+
+    const copyIcon = copyBtn.querySelector('.copy-icon') as HTMLElement;
+    const checkIcon = copyBtn.querySelector('.check-icon') as HTMLElement;
+
+    if (copyIcon && checkIcon) {
+      copyIcon.style.display = 'none';
+      checkIcon.style.display = 'block';
+      checkIcon.style.color = '#22c55e';
+
+      setTimeout(() => {
+        copyIcon.style.display = 'block';
+        checkIcon.style.display = 'none';
+        copiedBlockId.value = null;
+      }, 2000);
     }
+  } catch (err) {
+    console.error('Failed to copy code:', err);
   }
 }
 </script>
 
 <template>
   <div
+    ref="containerRef"
     class="markdown-content prose prose-sm dark:prose-invert max-w-none"
-    @click="handleClick"
+    @click="handleCopyClick"
     v-html="renderedContent"
   />
 </template>
@@ -232,14 +232,6 @@ function handleClick(event: MouseEvent): void {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-.copy-btn .hidden {
-  display: none;
-}
-
-.copy-btn .check-icon {
-  color: #22c55e;
-}
-
 .markdown-content pre.hljs {
   margin: 0;
   padding: 1rem;
@@ -331,64 +323,7 @@ function handleClick(event: MouseEvent): void {
   line-height: 1.25;
 }
 
-.markdown-content h1 {
-  font-size: 1.5em;
-}
-
-.markdown-content h2 {
-  font-size: 1.25em;
-}
-
-.markdown-content h3 {
-  font-size: 1.125em;
-}
-
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-literal,
-.hljs-section,
-.hljs-link {
-  color: #569cd6;
-}
-
-.hljs-string,
-.hljs-title,
-.hljs-name,
-.hljs-type,
-.hljs-attribute,
-.hljs-symbol,
-.hljs-bullet,
-.hljs-addition,
-.hljs-variable,
-.hljs-template-tag,
-.hljs-template-variable {
-  color: #ce9178;
-}
-
-.hljs-comment,
-.hljs-quote,
-.hljs-deletion,
-.hljs-meta {
-  color: #6a9955;
-}
-
-.hljs-number,
-.hljs-regexp,
-.hljs-literal,
-.hljs-built_in {
-  color: #b5cea8;
-}
-
-.hljs-attr,
-.hljs-params {
-  color: #9cdcfe;
-}
-
-.hljs-function {
-  color: #dcdcaa;
-}
-
-.hljs-class .hljs-title {
-  color: #4ec9b0;
-}
+.markdown-content h1 { font-size: 1.5em; }
+.markdown-content h2 { font-size: 1.25em; }
+.markdown-content h3 { font-size: 1.125em; }
 </style>
