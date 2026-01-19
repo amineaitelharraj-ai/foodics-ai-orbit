@@ -1,0 +1,922 @@
+# React to Vue Migration Guide - Foodics Labeeb UI
+
+## Overview
+
+This document captures all changes made to the React application since commit `6fdcda8b` (129 commits) to ensure complete feature parity in the Vue migration.
+
+---
+
+## 1. Core Features to Migrate
+
+### 1.1 WebSocket & Backend Integration
+
+| Feature | React Implementation | Vue Equivalent |
+|---------|---------------------|----------------|
+| WebSocket Client | `src/services/labeeb-api.ts` (LabeebClient class) | Composable or Pinia store |
+| Session Tracking | URL query param `?session_id=` | Vue Router query params |
+| Token Auth | Token passed in WebSocket URL | Same approach |
+| Reconnection | Exponential backoff (max 5 attempts) | Same logic needed |
+| Ping/Pong | 30-second heartbeat interval | Same logic needed |
+
+**WebSocket Message Types to Handle:**
+```typescript
+// Inbound messages
+'token'              // Streaming AI response content
+'interrupt'          // HITL approval request
+'complete'           // Session/message complete
+'approval_ack'       // Approval decision acknowledged
+'tool_start'         // Tool execution started
+'tool_end'           // Tool execution ended
+'complex_query_notice' // Complex query warning
+'large_data_notice'  // Large data warning
+'query_clarification' // Request user to refine query
+'clarification_ack'  // Clarification acknowledged
+'refinement_applied' // Refinement was applied
+'error'              // Error message
+'pong'               // Heartbeat response
+
+// Outbound messages
+'message'            // User message
+'approve'            // HITL approval decision
+'clarification_response' // Query clarification response
+'ping'               // Heartbeat ping
+```
+
+### 1.2 State Management (useLabeeb Hook → Vue Composable/Pinia)
+
+**State to Replicate:**
+```typescript
+messages: Message[]
+isConnected: boolean
+loadingSessions: Set<string>        // Per-session loading state
+pendingApproval: InterruptEvent | null
+streamingContent: string
+currentSessionId: string | null
+sessions: Session[]
+error: string | null
+toolStatus: { toolName: string; message?: string } | null
+complexQueryNotice: string | null
+largeDataNotice: string | null
+queryClarification: {
+  sessionId: string
+  toolName: string
+  message: string
+  suggestedFilters: string[]
+} | null
+```
+
+**Actions to Replicate:**
+- `sendMessage(content: string)`
+- `handleApproval(decision: 'approve'|'reject', reason?: string, sessionId?: string)`
+- `startNewSession()`
+- `loadSession(sessionId: string)`
+- `deleteSession(sessionId: string)`
+- `handleClarificationProceed()`
+- `handleClarificationRefine(refinement: string)`
+- `handleClarificationCancel()`
+
+### 1.3 Chat Persistence (Session Storage)
+
+**File:** `src/services/session-storage.ts`
+
+**API Calls:**
+- `GET /api/chat/sessions` - List all sessions
+- `GET /api/chat/sessions/:id` - Get single session with messages
+- `POST /api/chat/sessions` - Create new session
+- `POST /api/chat/sessions/:id/messages` - Add message to session
+- `DELETE /api/chat/sessions/:id` - Delete session
+
+**Features:**
+- Day-based grouping (Today, Yesterday, This Week, etc.)
+- Pagination: Load 3 sessions at a time
+- Retry mechanism: 3 retries with exponential backoff
+- Optimistic updates with rollback on failure
+
+---
+
+## 2. UI Components to Migrate
+
+### 2.1 Human-in-the-Loop (HITL) Cards
+
+**Directory:** `src/components/hitl/`
+
+| Component | Purpose | Operation Colors |
+|-----------|---------|------------------|
+| `HITLCard.tsx` | Container wrapper for all cards | - |
+| `ProductCard.tsx` | Product creation/update preview | create=green, update=blue |
+| `CategoryCard.tsx` | Category management | delete=red |
+| `CustomerCard.tsx` | Customer data preview | - |
+| `PointsCard.tsx` | Loyalty points operations | - |
+| `LoyaltyProgramCard.tsx` | Loyalty program preview | - |
+| `LoyaltyRewardCard.tsx` | Reward configuration | - |
+| `PromotionCard.tsx` | Promotion/discount preview | - |
+| `ComboCard.tsx` | Combo meal configuration | - |
+| `ModifierCard.tsx` | Product modifier preview | - |
+| `BranchCard.tsx` | Branch/location data | - |
+| `SupplierCard.tsx` | Supplier information | - |
+| `InventoryTransactionCard.tsx` | Stock transactions | - |
+| `InventoryCountCard.tsx` | Inventory count preview | - |
+| `GenericCard.tsx` | Fallback for unknown types | - |
+
+**HITL Card States:**
+- `pending` - Awaiting user decision (shows Approve/Reject buttons)
+- `approved` - User approved (green indicator, buttons hidden)
+- `rejected` - User rejected (red indicator, buttons hidden)
+
+**Key Feature:** Cards remain visible as audit trail after decision
+
+### 2.2 Query Clarification Modal
+
+**File:** `src/components/QueryClarificationModal.tsx`
+
+**Features:**
+- "Quick Question" header with Foodics close icon
+- Displays AI's clarification message
+- Shows suggested filters as chips
+- Text input for custom refinement
+- Three actions: "Get All" / "Refine" / "Cancel"
+
+### 2.3 Structured Response Rendering
+
+**File:** `src/components/StructuredResponse.tsx`
+
+**Supported display_type values:**
+- `table` - Renders data grid with headers
+- `chart` - Renders Recharts visualization
+- `list` - Bullet point list
+- `summary` - Key-value pairs
+- `code` - Syntax highlighted code block
+
+**Helper:** `src/utils/message-utils.ts` - `isStructuredResponse()` function
+
+### 2.4 Message Feedback
+
+**File:** `src/components/ui/MessageFeedback.tsx`
+
+**Features:**
+- Thumbs up/down buttons on AI messages
+- Detailed feedback popup with rating options
+- Connected to backend API: `POST /api/feedback`
+
+### 2.5 Other UI Components
+
+| Component | Purpose |
+|-----------|---------|
+| `ChatSidebar.tsx` | Chat history list with search |
+| `ApprovalModal.tsx` | Legacy modal (replaced by inline cards) |
+| `FoodicsIcon.tsx` | 1,600+ Foodics brand icons |
+| `CodeBlock.tsx` | Syntax highlighted code with copy |
+| `CopyButton.tsx` | Reusable copy-to-clipboard |
+| `RegenerateButton.tsx` | Retry last AI response |
+
+---
+
+## 3. Chat Experience Features
+
+### 3.1 Message Rendering
+- Markdown rendering using `react-markdown` with GFM
+- Hide raw JSON during streaming, show "Processing response..."
+- Copy button on hover for AI responses
+- Syntax highlighting for code blocks
+
+### 3.2 Loading & Status Indicators
+- Tool progress: "Looking up products...", "Searching inventory..."
+- Large data notice in loading spinner
+- Complex query notice with BI tool link
+- Keyboard hint: "Enter to send" when input empty
+
+### 3.3 Auto-scroll Behavior
+- Scroll to bottom on new messages
+- Scroll on streaming content updates
+- Preserve position when loading history
+
+### 3.4 Input Area States
+- Disabled when HITL approval pending
+- Shows pending approval warning
+- Shows error messages inline
+
+---
+
+## 4. Waiting Messages (Arabic/KSA F&B Themed)
+
+**Implementation:** Rotating messages during AI processing
+
+**Sample Messages:**
+```typescript
+const waitingMessages = [
+  "Brewing your Qahwa with extra cardamom... ☕",
+  "Slow-cooking your Kabsa to perfection... 🍚",
+  "Rolling the Sambusas with care... 🥟",
+  "Grilling fresh Shawarma... 🥙",
+  "Preparing your Kunafa... 🍮",
+  "Mixing fresh Laban... 🥛",
+]
+```
+
+**Features:**
+- Rotating food emojis
+- Promotional tips for Foodics features
+- Islamic-friendly (no alcohol/pork references)
+
+---
+
+## 5. Authentication Flow
+
+**File:** `src/services/cognito-auth.ts`
+
+**Environment Variables:**
+```env
+VITE_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
+VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+VITE_COGNITO_REGION=eu-west-1
+```
+
+**Auth Methods:**
+- `signIn(email, password)` → Returns tokens
+- `signUp(email, password, name?)` → Creates user
+- `confirmSignUp(email, code)` → Verifies email
+- `signOut()` → Clears session
+- `getTokens()` → Gets current JWT tokens
+- `getCurrentUser()` → Gets user profile
+
+**Token Expiry Handling:**
+- Automatic redirect to `/login` on 401 response
+- Preserve intended destination for post-login redirect
+
+---
+
+## 6. Image Generation (Nova Canvas)
+
+**File:** `src/services/image-generation.ts`
+
+**Purpose:** Generate product images for HITL ProductCard
+
+**API Endpoint:** AWS Nova Canvas via backend proxy
+
+**Usage:** Called when ProductCard needs auto-generated image
+
+---
+
+## 7. Type Definitions to Migrate
+
+**File:** `src/types/hitl-previews.ts` (382 lines)
+
+**Key Types:**
+```typescript
+type HITLStatus = 'pending' | 'approved' | 'rejected'
+
+interface ProductPreview {
+  name: string
+  name_localized?: string
+  sku?: string
+  barcode?: string
+  description?: string
+  price: number
+  cost?: number
+  category?: string
+  image?: string
+  // ... more fields
+}
+
+// Similar interfaces for:
+// CategoryPreview, ModifierPreview, BranchPreview,
+// SupplierPreview, CustomerPreview, ComboPreview,
+// PointsPreview, LoyaltyProgramPreview, LoyaltyRewardPreview,
+// PromotionPreview, InventoryTransactionPreview, InventoryCountPreview
+```
+
+---
+
+## 8. API Endpoints Summary
+
+### Labeeb AI WebSocket
+```
+ws://{VITE_LABEEB_API_URL}?token={JWT_TOKEN}&session_id={SESSION_ID}
+```
+
+### Chat History API
+```
+GET    /api/chat/sessions
+GET    /api/chat/sessions/:id
+POST   /api/chat/sessions
+POST   /api/chat/sessions/:id/messages
+DELETE /api/chat/sessions/:id
+```
+
+### Feedback API
+```
+POST   /api/feedback
+```
+
+### Fraud Detection API (if migrating)
+```
+POST   /api/fraud/events
+GET    /api/fraud/flags
+PATCH  /api/fraud/flags/:id
+GET    /api/fraud/rules
+POST   /api/fraud/rules
+PATCH  /api/fraud/rules/:id
+DELETE /api/fraud/rules/:id
+GET    /api/fraud/metrics
+GET    /api/fraud/dashboard
+GET    /api/fraud/health
+```
+
+---
+
+## 9. Environment Variables
+
+```env
+# Labeeb AI
+VITE_LABEEB_API_URL=ws://Labeeb-Servi-WqxKpTaxpSEK-1382785740.eu-west-1.elb.amazonaws.com
+
+# AWS Cognito
+VITE_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
+VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+VITE_COGNITO_REGION=eu-west-1
+
+# Feature Flags
+VITE_ENABLE_VOICE=false
+VITE_ENABLE_CHARTS=true
+
+# Optional
+VITE_CHAT_API_URL=<chat-history-api-url>
+```
+
+---
+
+## 10. Key Files Reference
+
+| React File | Purpose | Vue Equivalent |
+|------------|---------|----------------|
+| `src/services/labeeb-api.ts` | WebSocket client | `composables/useWebSocket.ts` or Pinia |
+| `src/hooks/useLabeeb.ts` | Chat state management | `stores/chat.ts` (Pinia) |
+| `src/components/hitl/*` | 14 HITL card components | `components/hitl/*` |
+| `src/components/QueryClarificationModal.tsx` | Query refinement | `components/QueryClarificationModal.vue` |
+| `src/components/StructuredResponse.tsx` | Data rendering | `components/StructuredResponse.vue` |
+| `src/types/hitl-previews.ts` | TypeScript types | Same file (TS is framework-agnostic) |
+| `src/services/image-generation.ts` | Nova Canvas | `services/imageGeneration.ts` |
+| `src/utils/message-utils.ts` | Helper functions | `utils/messageUtils.ts` |
+| `src/services/cognito-auth.ts` | Auth service | `services/cognitoAuth.ts` |
+| `src/services/session-storage.ts` | Chat persistence | `services/sessionStorage.ts` |
+
+---
+
+## 11. Vue Migration Checklist
+
+### Phase 1: Core Infrastructure
+- [ ] Set up Vue Router with same route structure
+- [ ] Set up Pinia stores for auth and chat state
+- [ ] Implement WebSocket client as composable or service
+- [ ] Implement Cognito auth service
+- [ ] Set up environment variables
+
+### Phase 2: Chat Core
+- [ ] Main chat page (OrbitAssistant equivalent)
+- [ ] Message rendering with markdown
+- [ ] Streaming content display
+- [ ] Session management (new/load/delete)
+- [ ] Chat history sidebar
+
+### Phase 3: HITL System
+- [ ] HITLCard container component
+- [ ] All 13 specialized card components
+- [ ] Approval/rejection flow
+- [ ] Status tracking and persistence
+
+### Phase 4: Enhanced Features
+- [ ] Query clarification modal
+- [ ] Structured response rendering
+- [ ] Message feedback system
+- [ ] Tool status indicators
+- [ ] Waiting messages
+
+### Phase 5: Polish
+- [ ] Foodics icon integration
+- [ ] Auto-scroll behavior
+- [ ] Error handling
+- [ ] Loading states
+- [ ] Mobile responsiveness
+
+---
+
+## 12. Verification Checklist
+
+To validate the Vue implementation has feature parity:
+
+1. **WebSocket Connection**
+   - [ ] Connects with token in URL
+   - [ ] Handles all 12+ message types
+   - [ ] Reconnects on disconnect
+   - [ ] Maintains heartbeat
+
+2. **Chat Flow**
+   - [ ] Send message → receive streaming response
+   - [ ] Messages persist across page reload
+   - [ ] Can switch between sessions
+   - [ ] Can delete sessions
+
+3. **HITL Flow**
+   - [ ] Interrupt event shows inline card
+   - [ ] Approve sends correct message
+   - [ ] Reject sends correct message with reason
+   - [ ] Card updates to show decision
+   - [ ] Card remains as audit trail
+
+4. **Query Clarification**
+   - [ ] Modal appears on clarification event
+   - [ ] "Get All" sends proceed action
+   - [ ] "Refine" sends refinement text
+   - [ ] "Cancel" cancels the operation
+
+5. **UI/UX**
+   - [ ] Markdown renders correctly
+   - [ ] Code blocks have copy button
+   - [ ] Tool status shows during operations
+   - [ ] Waiting messages rotate
+   - [ ] Auto-scroll works
+
+---
+
+---
+
+## Appendix A: Code Examples from React Implementation
+
+### A.1 WebSocket Client (src/services/labeeb-api.ts)
+
+```typescript
+// Key interfaces
+export interface Message {
+  id: string
+  role: 'user' | 'assistant' | 'hitl'
+  content: string
+  timestamp: Date
+  isStreaming?: boolean
+  hitlData?: {
+    preview: unknown
+    session_id: string
+    tool_name: string
+    status: 'pending' | 'approved' | 'rejected'
+    generatedImageUrl?: string
+  }
+}
+
+export interface InterruptEvent {
+  session_id: string
+  action: string
+  tool_name: string
+  preview: unknown
+  arguments: Record<string, unknown>
+}
+
+export interface LabeebClientOptions {
+  baseUrl: string
+  token: string
+  onToken?: (content: string) => void
+  onInterrupt?: (interrupt: InterruptEvent) => void
+  onComplete?: (sessionId: string) => void
+  onApprovalAck?: (ack: ApprovalAckEvent) => void
+  onToolStart?: (toolName: string, message: string) => void
+  onToolEnd?: (toolName: string) => void
+  onComplexQueryNotice?: (message: string) => void
+  onLargeDataNotice?: (message: string) => void
+  onQueryClarification?: (data: { sessionId: string; toolName: string; message: string; suggestedFilters: Array<{name: string; description: string}> }) => void
+  onClarificationAck?: (sessionId: string, action: 'proceed' | 'refine') => void
+  onRefinementApplied?: (sessionId: string, refinement: string, toolName: string) => void
+  onError?: (error: Error) => void
+  onConnectionChange?: (connected: boolean) => void
+}
+
+// WebSocket message types
+type WebSocketMessage =
+  | { type: 'token'; content: string }
+  | { type: 'interrupt'; session_id: string; action: string; tool_name: string; preview: string; arguments: Record<string, unknown> }
+  | { type: 'complete'; session_id: string }
+  | { type: 'approval_ack'; session_id: string; decision: string }
+  | { type: 'tool_start'; tool_name: string; message: string }
+  | { type: 'tool_end'; tool_name: string }
+  | { type: 'complex_query_notice'; message: string }
+  | { type: 'large_data_notice'; message: string }
+  | { type: 'query_clarification'; session_id: string; tool_name: string; message: string; suggested_filters: Array<{name: string; description: string}>; arguments: Record<string, unknown> }
+  | { type: 'clarification_ack'; session_id: string; action: 'proceed' | 'refine' }
+  | { type: 'refinement_applied'; session_id: string; refinement: string; tool_name: string }
+  | { type: 'error'; message: string; pending_tool?: string }
+  | { type: 'pong' }
+
+// Close code error messages
+const CLOSE_CODE_MESSAGES: Record<number, string> = {
+  4001: 'Missing authentication token',
+  4002: 'Token expired - please log in again',
+  4003: 'Invalid token audience',
+  4004: 'Invalid token - please log in again',
+  4005: 'Failed to connect to AgentCore'
+}
+
+// Key methods in LabeebClient class
+connect(): Promise<void> {
+  // URL with token: `${wsUrl}?token=${encodeURIComponent(this.options.token)}`
+  // Heartbeat: setInterval with 30000ms ping
+  // Reconnection: exponential backoff (1000 * Math.pow(2, attempts - 1))
+}
+
+sendMessage(content: string): void {
+  this.ws.send(JSON.stringify({
+    type: 'message',
+    content,
+    session_id: this.sessionId
+  }))
+}
+
+approve(sessionId: string, decision: 'approve' | 'reject', reason?: string): void {
+  this.ws.send(JSON.stringify({
+    type: 'approve',
+    session_id: sessionId,
+    decision,
+    reason
+  }))
+}
+
+sendClarificationResponse(sessionId: string, action: 'proceed' | 'refine', refinement?: string): void {
+  const payload: Record<string, unknown> = {
+    type: 'clarification_response',
+    session_id: sessionId,
+    action
+  }
+  if (action === 'refine' && refinement) {
+    payload.refinement = refinement
+  }
+  this.ws.send(JSON.stringify(payload))
+}
+```
+
+### A.2 State Management Hook (src/hooks/useLabeeb.ts)
+
+```typescript
+export function useLabeeb({ token, idToken, baseUrl, onTokenExpired }: UseLabeebOptions) {
+  // State declarations
+  const [messages, setMessages] = useState<Message[]>([])
+  const [isConnected, setIsConnected] = useState(false)
+  const [loadingSessions, setLoadingSessions] = useState<Set<string>>(new Set())
+  const [pendingApproval, setPendingApproval] = useState<InterruptEvent | null>(null)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null)
+  const [complexQueryNotice, setComplexQueryNotice] = useState<string | null>(null)
+  const [largeDataNotice, setLargeDataNotice] = useState<string | null>(null)
+  const [queryClarification, setQueryClarification] = useState<{
+    sessionId: string
+    toolName: string
+    message: string
+    suggestedFilters: Array<{name: string; description: string}>
+  } | null>(null)
+
+  // Refs for synchronous access
+  const clientRef = useRef<LabeebClient | null>(null)
+  const streamingContentRef = useRef('')  // Critical: sync streaming content for onComplete
+  const savedMessageIds = useRef<Set<string>>(new Set())
+  const pendingSessionRef = useRef<string | null>(null)
+  const currentSessionRef = useRef<string | null>(null)
+
+  // Key callback handlers
+  onToken: (content) => {
+    // Update ref synchronously so onComplete can read latest value immediately
+    streamingContentRef.current = streamingContentRef.current + content
+    setStreamingContent(prev => prev + content)
+  }
+
+  onInterrupt: (interrupt) => {
+    // Ignore interrupts from old sessions
+    if (currentSessionRef.current && interrupt.session_id !== currentSessionRef.current) {
+      return
+    }
+
+    // Finalize any streaming content
+    if (streamingContentRef.current) {
+      // Add assistant message with current streaming content
+      setStreamingContent('')
+      streamingContentRef.current = ''
+    }
+
+    // Create HITL message
+    const hitlMessage: Message = {
+      id: `hitl-${interrupt.session_id}-${Date.now()}`,
+      role: 'hitl',
+      content: '',
+      timestamp: new Date(),
+      hitlData: {
+        preview: interrupt.preview,
+        session_id: interrupt.session_id,
+        tool_name: interrupt.tool_name,
+        status: 'pending'
+      }
+    }
+    setMessages(prev => [...prev, hitlMessage])
+    setPendingApproval(interrupt)
+  }
+
+  onComplete: (sessionId) => {
+    // Finalize streaming content into message
+    const currentStreaming = streamingContentRef.current
+    if (currentStreaming) {
+      const newMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: currentStreaming,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, newMessage])
+      setStreamingContent('')
+    }
+    setCurrentSessionId(sessionId)
+  }
+
+  // Return object
+  return {
+    messages, isConnected, isLoading, pendingApproval, streamingContent,
+    currentSessionId, sessions, error, toolStatus, complexQueryNotice,
+    largeDataNotice, queryClarification, updateHitlImageUrl,
+    sendMessage, handleApproval, handleClarificationProceed,
+    handleClarificationRefine, handleClarificationCancel,
+    startNewSession, loadSession, deleteSession, clearError, clearComplexQueryNotice
+  }
+}
+```
+
+### A.3 HITL Card System
+
+**HITLCard.tsx - Router Component:**
+```typescript
+const CARD_COMPONENTS: Record<string, React.ComponentType<HITLCardProps>> = {
+  'product_preview': ProductCard,
+  'category_preview': CategoryCard,
+  'customer_preview': CustomerCard,
+  'points_preview': PointsCard,
+  'loyalty_program_preview': LoyaltyProgramCard,
+  'loyalty_reward_preview': LoyaltyRewardCard,
+  'promotion_preview': PromotionCard,
+  'combo_preview': ComboCard,
+  'modifier_preview': ModifierCard,
+  'branch_preview': BranchCard,
+  'supplier_preview': SupplierCard,
+  'inventory_transaction_preview': InventoryTransactionCard,
+  'inventory_count_preview': InventoryCountCard,
+}
+
+export function HITLCard(props: HITLCardProps) {
+  const CardComponent = CARD_COMPONENTS[props.preview.type] || GenericCard
+  return <CardComponent {...props} />
+}
+```
+
+**HITLCardWrapper - Container Component:**
+```typescript
+export function HITLCardWrapper({
+  preview, status, onApprove, onReject, children,
+}: Omit<HITLCardProps, 'onGenerateImage' | 'generatedImageUrl'> & { children: React.ReactNode }) {
+  const operationStyle = OPERATION_STYLES[preview.operation] || OPERATION_STYLES.create
+
+  // Status-based styling
+  const statusBorderColor = {
+    pending: 'border-amber-300 dark:border-amber-600',
+    approved: 'border-green-300 dark:border-green-600',
+    rejected: 'border-red-300 dark:border-red-600',
+  }[status]
+
+  return (
+    <div className={`rounded-xl border-2 ${statusBorderColor} overflow-hidden`}>
+      <div className="p-4">
+        {/* Operation badge */}
+        <span className={`text-xs font-medium px-2 py-1 rounded-full`}>
+          {status === 'pending' ? operationStyle.statusText : getCompletedStatusText(preview.operation)}
+        </span>
+
+        {/* Card content */}
+        {children}
+
+        {/* Action buttons - only show when pending */}
+        {status === 'pending' && (
+          <div className="flex gap-3 mt-4 pt-4 border-t">
+            <button onClick={() => onReject()}>Reject</button>
+            <button onClick={onApprove}>Approve</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+**ProductCard.tsx - Example Card:**
+```typescript
+export function ProductCard({ preview, status, onApprove, onReject, onGenerateImage, generatedImageUrl }: HITLCardProps) {
+  const productPreview = preview as ProductPreview
+  const { product, combo_options, modifiers } = productPreview
+  const imageUrl = generatedImageUrl || product.image_url
+  const [generating, setGenerating] = useState(false)
+
+  const handleGenerateImage = async () => {
+    if (!onGenerateImage) return
+    setGenerating(true)
+    try {
+      await onGenerateImage()
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <HITLCardWrapper preview={preview} status={status} onApprove={onApprove} onReject={onReject}>
+      <div className="flex gap-4">
+        {/* Product image or generate button */}
+        <div className="w-24 h-24">
+          {imageUrl ? (
+            <img src={imageUrl} alt={product.name} />
+          ) : status === 'pending' && onGenerateImage ? (
+            <button onClick={handleGenerateImage}>Generate</button>
+          ) : null}
+        </div>
+
+        {/* Product details */}
+        <div>
+          <h4>{product.name}</h4>
+          {product.category && <p>{product.category.name}</p>}
+          {product.price && <p>{formatPrice(product.price)}</p>}
+        </div>
+      </div>
+
+      {/* Combo options */}
+      {combo_options?.map((option, i) => (
+        <span key={i}>{option.name}</span>
+      ))}
+
+      {/* Modifiers */}
+      {modifiers?.map((mod, i) => (
+        <li key={i}>{mod.name} (+{formatPrice(mod.price_delta)})</li>
+      ))}
+    </HITLCardWrapper>
+  )
+}
+```
+
+### A.4 Query Clarification Modal
+
+```typescript
+interface QueryClarificationModalProps {
+  sessionId: string
+  toolName: string
+  message: string
+  suggestedFilters: Array<{name: string; description: string}>
+  onProceed: () => void
+  onRefine: (refinement: string) => void
+  onCancel: () => void
+}
+
+export const QueryClarificationModal: React.FC<QueryClarificationModalProps> = ({
+  toolName, message, suggestedFilters, onProceed, onRefine, onCancel,
+}) => {
+  const [refinement, setRefinement] = useState('')
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+        {/* Header with close button */}
+        <h3>Quick Question</h3>
+        <p>{toolName.replace('Foodics___', '').replace(/_/g, ' ')}</p>
+        <button onClick={onCancel}><FoodicsIcon name="close" /></button>
+
+        {/* Message */}
+        <p>{message}</p>
+
+        {/* Suggested filters */}
+        {suggestedFilters.length > 0 && (
+          <ul>
+            {suggestedFilters.map((f) => (
+              <li key={f.name}><strong>{f.name}:</strong> {f.description}</li>
+            ))}
+          </ul>
+        )}
+
+        {/* Refinement input */}
+        <textarea
+          value={refinement}
+          onChange={(e) => setRefinement(e.target.value)}
+          placeholder="e.g., only active products, limit to 50"
+        />
+
+        {/* Action buttons */}
+        <button onClick={onCancel}>Cancel</button>
+        <button onClick={onProceed}>Get All</button>
+        <button onClick={() => onRefine(refinement)} disabled={!refinement.trim()}>
+          Refine
+        </button>
+      </div>
+    </div>
+  )
+}
+```
+
+### A.5 HITL Type Definitions (src/types/hitl-previews.ts)
+
+```typescript
+export interface Price {
+  amount: number
+  currency: string
+}
+
+export type HITLStatus = 'pending' | 'approved' | 'rejected'
+
+export type OperationType =
+  | 'create' | 'update' | 'delete' | 'restore'
+  | 'activate' | 'deactivate'
+  | 'award' | 'redeem'
+  | 'attach' | 'detach'
+  | 'blacklist' | 'unblacklist'
+  | 'add_product' | 'remove_product' | 'update_product'
+  | 'add_modifier' | 'remove_modifier'
+  | 'add_category' | 'remove_category'
+  | 'add_tag' | 'remove_tag'
+  | 'extend'
+
+export interface BasePreview {
+  type: string
+  version: string
+  operation: OperationType
+}
+
+export interface ProductPreview extends BasePreview {
+  type: 'product_preview'
+  operation: 'create' | 'update' | 'delete' | 'restore'
+  product: {
+    id?: string
+    name: string
+    description?: string
+    name_localized?: string
+    price?: Price
+    cost_price?: Price
+    category?: { id: string; name: string }
+    sku?: string
+    barcode?: string
+    image_url?: string
+    tax_group_id?: string
+    is_active: boolean
+  }
+  combo_options?: Array<{
+    name: string
+    type: string
+    price?: Price
+    quantity?: number
+  }>
+  modifiers?: Array<{
+    name: string
+    type: 'modifier'
+    price_delta?: Price
+    is_default?: boolean
+  }>
+}
+
+// ... CategoryPreview, ModifierPreview, BranchPreview, SupplierPreview,
+// CustomerPreview, ComboPreview, PointsPreview, LoyaltyProgramPreview,
+// LoyaltyRewardPreview, PromotionPreview, InventoryTransactionPreview,
+// InventoryCountPreview (all follow similar pattern)
+
+export type HITLPreview =
+  | ProductPreview
+  | CategoryPreview
+  | ModifierPreview
+  | BranchPreview
+  | SupplierPreview
+  | CustomerPreview
+  | ComboPreview
+  | PointsPreview
+  | LoyaltyProgramPreview
+  | LoyaltyRewardPreview
+  | PromotionPreview
+  | InventoryTransactionPreview
+  | InventoryCountPreview
+
+// Operation styling constants
+export const OPERATION_STYLES: Record<string, { icon: string; color: string; statusText: string }> = {
+  create: { icon: 'add', color: 'green', statusText: 'Creating...' },
+  update: { icon: 'edit', color: 'blue', statusText: 'Updating...' },
+  delete: { icon: 'delete', color: 'red', statusText: 'Deleting...' },
+  restore: { icon: 'undo', color: 'yellow', statusText: 'Restoring...' },
+  activate: { icon: 'check-circle', color: 'green', statusText: 'Activating...' },
+  deactivate: { icon: 'pause-circle', color: 'gray', statusText: 'Deactivating...' },
+  award: { icon: 'add', color: 'green', statusText: 'Awarding...' },
+  redeem: { icon: 'remove', color: 'orange', statusText: 'Redeeming...' },
+  // ... more operations
+}
+
+export const STATUS_STYLES: Record<HITLStatus, { color: string; text: string }> = {
+  pending: { color: 'amber', text: 'Pending approval' },
+  approved: { color: 'green', text: 'Approved' },
+  rejected: { color: 'red', text: 'Rejected' },
+}
+```
+
+---
+
+*Generated from React codebase analysis on 2026-01-19*
+*129 commits since 6fdcda8b covering 16,080+ lines of changes*
